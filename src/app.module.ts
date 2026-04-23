@@ -1,8 +1,11 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { LoggerMiddleware } from './common/middleware/logger.middleware';
-import { PrismaService } from './prisma/prisma.service';
+import { LoggerMiddleware } from './common/middleware/logger.middleware.js';
+import { PrismaModule } from './modules/prisma/prisma.module.js';
+import { AuthModule } from './modules/auth/auth.module.js';
+import { MailModule } from './modules/mail/mail.module.js';
+import { RedisModule } from './redis/redis.module.js';
 
 @Module({
   imports: [
@@ -17,11 +20,19 @@ import { PrismaService } from './prisma/prisma.service';
         synchronize: true, // dev only
       }),
     }),
+
+    PrismaModule,
+
+    AuthModule,
+
+    MailModule,
+
+    RedisModule,
   ],
-  providers: [PrismaService],
+  providers: [],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(LoggerMiddleware).forRoutes('*');
   }
-}
+}
