@@ -5,6 +5,8 @@ import { AuthService } from './auth.service.js';
 import { AuthController } from './auth.controller.js';
 import { MailModule } from '../mail/mail.module.js';
 
+import { GoogleStrategy } from './strategies/google.strategy.js';
+
 @Module({
   imports: [
     MailModule,
@@ -16,7 +18,8 @@ import { MailModule } from '../mail/mail.module.js';
       }),
     }),
   ],
-  providers: [AuthService],
+  providers: [AuthService, GoogleStrategy],
   controllers: [AuthController],
 })
+
 export class AuthModule {}

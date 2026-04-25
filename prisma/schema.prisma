@@ -81,16 +81,49 @@ model products {
   price               Int
   category_id         Int?
   description         String?
+  image_url           String?               @db.VarChar(255)
+  is_featured         Boolean               @default(false)
+  summary             String?               @db.VarChar(255)
   created_at          DateTime?             @default(now()) @db.Timestamp(6)
   order_items         order_items[]
   product_concerns    product_concerns[]
   product_ingredients product_ingredients[]
   product_skin_types  product_skin_types[]
+  product_badges      product_badges[]
   categories          categories?           @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user_behaviors      user_behaviors[]
 
   @@index([category_id], map: "idx_product_category")
 }
+
+model banners {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.VarChar(255)
+  description String?
+  image_url   String?  @db.VarChar(255)
+  button_text String?  @db.VarChar(50)
+  button_link String?  @db.VarChar(255)
+  is_active   Boolean  @default(true)
+  position    String   @default("HERO") @db.VarChar(50)
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+}
+
+model badges {
+  id             Int              @id @default(autoincrement())
+  name           String           @unique @db.VarChar(100)
+  icon_url       String?          @db.VarChar(255)
+  product_badges product_badges[]
+}
+
+model product_badges {
+  product_id Int
+  badge_id   Int
+  badges     badges   @relation(fields: [badge_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([product_id, badge_id])
+}
+
 
 model skin_profiles {
   id          Int       @id @default(autoincrement())
@@ -126,7 +159,7 @@ model user_concerns {
 model users {
   id             Int              @id @default(autoincrement())
   email          String           @unique @db.VarChar(255)
-  password_hash  String           @db.VarChar(255)
+  password_hash  String?          @db.VarChar(255)
   name           String?          @db.VarChar(255)
   created_at     DateTime?        @default(now()) @db.Timestamp(6)
   role           Role             @default(USER)

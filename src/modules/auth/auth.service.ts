@@ -136,7 +136,12 @@ export class AuthService {
       throw new UnauthorizedException('Email not found');
     }
 
+    if (!user.password_hash) {
+      throw new UnauthorizedException('Please login using your social account or reset your password');
+    }
+
     const isMatch = await bcrypt.compare(dto.password, user.password_hash);
+
     if (!isMatch) {
       throw new UnauthorizedException('Invalid password');
     }
@@ -193,6 +198,40 @@ export class AuthService {
       if (error instanceof UnauthorizedException) throw error;
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
+  }
+
+  // 🌐 GOOGLE LOGIN
+  async googleLogin(req: any) {
+    if (!req.user) {
+      throw new BadRequestException('Unauthenticated');
+    }
+
+    let user = await this.prisma.users.findUnique({
+      where: { email: req.user.email },
+    });
+
+    if (!user) {
+      user = await this.prisma.users.create({
+        data: {
+          email: req.user.email,
+          name: `${req.user.firstName} ${req.user.lastName}`,
+          is_verified: true,
+          role: 'USER',
+        },
+      });
+    }
+
+    const tokens = await this.generateTokens(user.id, user.email, user.role || 'USER');
+    return {
+      success: true,
+      ...tokens,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    };
   }
 }
 

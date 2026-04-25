@@ -6,6 +6,7 @@ import { PrismaModule } from './modules/prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { MailModule } from './modules/mail/mail.module.js';
 import { RedisModule } from './redis/redis.module.js';
+import { ProductsModule } from './modules/products/products.module.js';
 
 @Module({
   imports: [
@@ -28,7 +29,10 @@ import { RedisModule } from './redis/redis.module.js';
     MailModule,
 
     RedisModule,
+
+    ProductsModule,
   ],
+
   providers: [],
 })
 export class AppModule implements NestModule {

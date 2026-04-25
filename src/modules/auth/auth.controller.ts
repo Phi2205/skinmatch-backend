@@ -1,4 +1,6 @@
-import { Controller, Post, Body, UnauthorizedException, Res, Req } from '@nestjs/common';
+import { Controller, Post, Body, UnauthorizedException, Res, Req, Get, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service.js';
 import { RegisterDto } from './dto/register.dto.js';
@@ -59,7 +61,11 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Bad request - Invalid or expired OTP' })
   verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.authService.verifyOtp(dto);
+    return this.authService.verifyOtp(dto).then(result => ({
+      success: true,
+      message: 'OTP verified successfully',
+      data: result
+    }));
   }
 
   @Post('login')
@@ -112,8 +118,12 @@ export class AuthController {
 
     return {
       success: true,
-      user: result.user,
+      message: 'Login successful',
+      data: {
+        user: result.user,
+      },
     };
+
   }
 
   @Post('refresh-token')
@@ -170,7 +180,51 @@ export class AuthController {
 
     return {
       success: true,
-      user: result.user,
+      message: 'Token refreshed successfully',
+      data: {
+        user: result.user,
+      },
     };
+
+  }
+
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  @ApiOperation({ summary: 'Login with Google' })
+  async googleAuth(@Req() req: any) {
+    // Passport redirects to Google
+  }
+
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  @ApiOperation({ summary: 'Google auth callback' })
+  async googleAuthRedirect(@Req() req: any, @Res() res: Response) {
+    const result = await this.authService.googleLogin(req);
+
+    const isProduction = process.env.NODE_ENV === 'production';
+    const isSecure = isProduction || process.env.FORCE_SECURE_COOKIES === 'true';
+
+    // Set refresh_token in HttpOnly cookie
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: isSecure,
+      sameSite: isSecure ? 'none' : 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    // Also set accessToken in cookie if the app expects it there
+    res.cookie('accessToken', result.accessToken, {
+      httpOnly: true,
+      secure: isSecure,
+      sameSite: isSecure ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    // Redirect to FE with access_token in URL params as requested
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    return res.redirect(`${frontendUrl}/auth/success?accessToken=${result.accessToken}`);
   }
 }
+
