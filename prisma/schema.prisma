@@ -11,9 +11,11 @@ datasource db {
 }
 
 model categories {
-  id       Int        @id @default(autoincrement())
-  name     String     @unique @db.VarChar(100)
-  products products[]
+  id        Int        @id @default(autoincrement())
+  name      String     @unique @db.VarChar(100)
+  slug      String     @unique @db.VarChar(100)
+  is_active Boolean    @default(true)
+  products  products[]
 }
 
 model concerns {
@@ -90,10 +92,20 @@ model products {
   product_ingredients product_ingredients[]
   product_skin_types  product_skin_types[]
   product_badges      product_badges[]
+  product_images      product_images[]
   categories          categories?           @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user_behaviors      user_behaviors[]
 
   @@index([category_id], map: "idx_product_category")
+}
+
+model product_images {
+  id         Int      @id @default(autoincrement())
+  product_id Int
+  image_url  String   @db.VarChar(255)
+  alt_text   String?  @db.VarChar(255)
+  is_main    Boolean  @default(false)
+  products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
 model banners {

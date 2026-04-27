@@ -7,6 +7,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { MailModule } from './modules/mail/mail.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { ProductsModule } from './modules/products/products.module.js';
+import { CategoriesModule } from './modules/categories/categories.module.js';
 
 @Module({
   imports: [
@@ -31,6 +32,8 @@ import { ProductsModule } from './modules/products/products.module.js';
     RedisModule,
 
     ProductsModule,
+
+    CategoriesModule,
   ],
 
   providers: [],

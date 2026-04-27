@@ -28,7 +28,14 @@ Thông tin chi tiết về mỹ phẩm.
 - `price`: Giá niêm yết.
 - `category_id`: Liên kết đến danh mục sản phẩm.
 - `is_featured`: Đánh dấu sản phẩm nổi bật trên trang chủ.
-- `image_url`: Ảnh sản phẩm.
+- `image_url`: Ảnh chính của sản phẩm (Thumbnail).
+
+### Bảng `product_images`
+Lưu trữ nhiều ảnh cho mỗi sản phẩm (Thư viện ảnh).
+- `product_id`: Liên kết đến sản phẩm.
+- `image_url`: Đường dẫn ảnh.
+- `alt_text`: Mô tả ảnh (cho SEO).
+- `is_main`: Đánh dấu là ảnh chính.
 
 ### Bảng `categories`
 Phân loại sản phẩm (Sữa rửa mặt, Serum, Kem dưỡng...).
