@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { CategoriesRepository } from '../repositories/categories.repository.js';
 import { CreateCategoryDto } from '../dto/create-category.dto.js';
 import { UpdateCategoryDto } from '../dto/update-category.dto.js';
@@ -8,15 +8,50 @@ import { UpdateCategoryStatusDto } from '../dto/update-category-status.dto.js';
 export class CategoriesService {
   constructor(private repository: CategoriesRepository) {}
 
+  async generateUniqueSlug(name: string, idToIgnore?: number, extraSlugsToIgnore: string[] = []): Promise<string> {
+    const baseSlug = this.slugify(name);
+    let slug = baseSlug;
+    let counter = 1;
+
+    while (true) {
+      if (!extraSlugsToIgnore.includes(slug)) {
+        const existing = await this.repository.findBySlug(slug);
+        if (!existing || (idToIgnore && existing.id === idToIgnore)) {
+          break; // Slug is unique
+        }
+      }
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+    return slug;
+  }
+
   async create(dto: CreateCategoryDto) {
-    const slug = this.slugify(dto.name);
+    const slug = await this.generateUniqueSlug(dto.name);
     return this.repository.create({ ...dto, slug });
+  }
+
+  async createMultiple(dtos: CreateCategoryDto[]) {
+    const data: any[] = [];
+    const usedSlugs: string[] = [];
+
+    for (const dto of dtos) {
+      const slug = await this.generateUniqueSlug(dto.name, undefined, usedSlugs);
+      usedSlugs.push(slug);
+      data.push({
+        name: dto.name,
+        slug,
+        is_active: dto.is_active ?? true,
+      });
+    }
+
+    return this.repository.createMany(data);
   }
 
   async update(id: number, dto: UpdateCategoryDto) {
     const data: any = { ...dto };
     if (dto.name) {
-      data.slug = this.slugify(dto.name);
+      data.slug = await this.generateUniqueSlug(dto.name, id);
     }
     return this.repository.update(id, data);
   }

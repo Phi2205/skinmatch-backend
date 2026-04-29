@@ -16,6 +16,13 @@ export class CategoriesRepository {
     });
   }
 
+  async createMany(data: any[]) {
+    return this.prisma.categories.createMany({
+      data,
+      skipDuplicates: true,
+    });
+  }
+
   async findAll(onlyActive = true) {
     return this.prisma.categories.findMany({
       where: onlyActive ? { is_active: true } : {},

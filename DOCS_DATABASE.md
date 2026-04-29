@@ -52,7 +52,6 @@ Hệ thống sử dụng các bảng trung gian cho quan hệ Many-to-Many:
 - `product_concerns`: Liên kết Sản phẩm - Vấn đề da.
 - `product_skin_types`: Liên kết Sản phẩm - Loại da phù hợp.
 - `product_badges`: Liên kết Sản phẩm - Các nhãn đặc tính.
-
 ---
 
 ## 4. Hệ thống Nội dung & Homepage (CMS)

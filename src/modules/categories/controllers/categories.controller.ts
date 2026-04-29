@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Param, UseGuards, Patch, Req } from '@nest
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CategoriesService } from '../services/categories.service.js';
 import { CreateCategoryDto } from '../dto/create-category.dto.js';
+import { CreateMultipleCategoriesDto } from '../dto/create-multiple-categories.dto.js';
 import { UpdateCategoryDto } from '../dto/update-category.dto.js';
 import { UpdateCategoryStatusDto } from '../dto/update-category-status.dto.js';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard.js';
@@ -25,6 +26,20 @@ export class CategoriesController {
     return {
       success: true,
       message: 'Category created successfully',
+      data,
+    };
+  }
+
+  @Post('bulk')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create multiple categories at once' })
+  async createMultiple(@Body() dto: CreateMultipleCategoriesDto) {
+    const data = await this.categoriesService.createMultiple(dto.categories);
+    return {
+      success: true,
+      message: 'Multiple categories created successfully',
       data,
     };
   }
