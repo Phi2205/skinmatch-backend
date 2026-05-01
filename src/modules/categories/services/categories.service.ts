@@ -3,10 +3,17 @@ import { CategoriesRepository } from '../repositories/categories.repository.js';
 import { CreateCategoryDto } from '../dto/create-category.dto.js';
 import { UpdateCategoryDto } from '../dto/update-category.dto.js';
 import { UpdateCategoryStatusDto } from '../dto/update-category-status.dto.js';
+import { RedisService } from '../../../redis/redis.service.js';
 
 @Injectable()
 export class CategoriesService {
-  constructor(private repository: CategoriesRepository) {}
+  private readonly CACHE_KEY_ALL = 'categories:all';
+  private readonly CACHE_KEY_ACTIVE = 'categories:active';
+
+  constructor(
+    private repository: CategoriesRepository,
+    private redisService: RedisService,
+  ) {}
 
   async generateUniqueSlug(name: string, idToIgnore?: number, extraSlugsToIgnore: string[] = []): Promise<string> {
     const baseSlug = this.slugify(name);
@@ -28,7 +35,9 @@ export class CategoriesService {
 
   async create(dto: CreateCategoryDto) {
     const slug = await this.generateUniqueSlug(dto.name);
-    return this.repository.create({ ...dto, slug });
+    const data = await this.repository.create({ ...dto, slug });
+    await this.clearCache();
+    return data;
   }
 
   async createMultiple(dtos: CreateCategoryDto[]) {
@@ -45,7 +54,9 @@ export class CategoriesService {
       });
     }
 
-    return this.repository.createMany(data);
+    const dataResult = await this.repository.createMany(data);
+    await this.clearCache();
+    return dataResult;
   }
 
   async update(id: number, dto: UpdateCategoryDto) {
@@ -53,11 +64,15 @@ export class CategoriesService {
     if (dto.name) {
       data.slug = await this.generateUniqueSlug(dto.name, id);
     }
-    return this.repository.update(id, data);
+    const updated = await this.repository.update(id, data);
+    await this.clearCache();
+    return updated;
   }
 
   async updateStatus(id: number, dto: UpdateCategoryStatusDto) {
-    return this.repository.update(id, { is_active: dto.is_active });
+    const updated = await this.repository.update(id, { is_active: dto.is_active });
+    await this.clearCache();
+    return updated;
   }
 
   private slugify(text: string): string {
@@ -75,7 +90,25 @@ export class CategoriesService {
   }
 
   async findAll(onlyActive = true) {
-    return this.repository.findAll(onlyActive);
+    const cacheKey = onlyActive ? this.CACHE_KEY_ACTIVE : this.CACHE_KEY_ALL;
+    const cachedData = await this.redisService.get(cacheKey);
+
+    if (cachedData) {
+      return JSON.parse(cachedData);
+    }
+
+    const data = await this.repository.findAll(onlyActive);
+    // Cache for 1 hour
+    await this.redisService.set(cacheKey, JSON.stringify(data), 3600);
+
+    return data;
+  }
+
+  private async clearCache() {
+    await Promise.all([
+      this.redisService.del(this.CACHE_KEY_ALL),
+      this.redisService.del(this.CACHE_KEY_ACTIVE),
+    ]);
   }
 
   async findOne(id: number) {

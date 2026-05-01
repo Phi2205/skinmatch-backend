@@ -41,6 +41,9 @@ model order_items {
   price      Int?
   orders     orders?   @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   products   products? @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([order_id], map: "idx_order_items_order")
+  @@index([product_id], map: "idx_order_items_product")
 }
 
 model orders {
@@ -60,6 +63,8 @@ model product_concerns {
   products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([product_id, concern_id])
+  @@index([product_id], map: "idx_product_concerns_product")
+  @@index([concern_id], map: "idx_product_concerns_concern")
 }
 
 model product_ingredients {
@@ -69,6 +74,8 @@ model product_ingredients {
   products      products    @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([product_id, ingredient_id])
+  @@index([product_id], map: "idx_product_ingredients_product")
+  @@index([ingredient_id], map: "idx_product_ingredients_ingredient")
 }
 
 model product_skin_types {
@@ -78,6 +85,8 @@ model product_skin_types {
   skin_types   skin_types @relation(fields: [skin_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([product_id, skin_type_id])
+  @@index([product_id], map: "idx_product_skin_types_product")
+  @@index([skin_type_id], map: "idx_product_skin_types_skin_type")
 }
 
 model products {
@@ -110,6 +119,8 @@ model product_images {
   alt_text   String?  @db.VarChar(255)
   is_main    Boolean  @default(false)
   products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([product_id], map: "idx_product_images_product")
 }
 
 model banners {
@@ -139,6 +150,8 @@ model product_badges {
   products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([product_id, badge_id])
+  @@index([product_id], map: "idx_product_badges_product")
+  @@index([badge_id], map: "idx_product_badges_badge")
 }
 
 model skin_profiles {

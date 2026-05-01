@@ -125,6 +125,18 @@ export class AuthController {
     };
 
   }
+  
+  @Post('logout')
+  @ApiOperation({ summary: 'Logout user and clear cookies' })
+  async logout(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie('accessToken', { path: '/' });
+    res.clearCookie('refreshToken', { path: '/' });
+    
+    return {
+      success: true,
+      message: 'Logged out successfully',
+    };
+  }
 
   @Post('refresh-token')
   @ApiOperation({ summary: 'Get new access token using refresh token from cookie' })
