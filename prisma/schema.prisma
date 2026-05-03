@@ -92,9 +92,12 @@ model product_skin_types {
 model products {
   id                  Int                   @id @default(autoincrement())
   name                String                @db.VarChar(255)
+  slug                String                @unique @db.VarChar(255)
   price               Int
   category_id         Int?
-  description         String?
+  description         String?               @db.Text
+  ingredient_full_text String?              @db.Text
+  usage_instructions  String?               @db.Text
   image_url           String?               @db.VarChar(255)
   is_featured         Boolean               @default(false)
   is_active           Boolean               @default(true)
@@ -118,6 +121,7 @@ model product_images {
   image_url  String   @db.VarChar(255)
   alt_text   String?  @db.VarChar(255)
   is_main    Boolean  @default(false)
+  position   Int      @default(0)
   products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([product_id], map: "idx_product_images_product")

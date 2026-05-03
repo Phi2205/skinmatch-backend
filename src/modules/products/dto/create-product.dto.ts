@@ -9,6 +9,12 @@ export class CreateProductDto {
   @IsString()
   @IsNotEmpty()
   name: string;
+ 
+  @ApiProperty({ example: 'sua-rua-mat-abc', description: 'Slug sản phẩm' })
+  @IsString()
+  @IsNotEmpty()
+  slug: string;
+
 
   @ApiProperty({ example: 250000, description: 'Giá sản phẩm (VND)' })
   @Type(() => Number)
@@ -26,6 +32,16 @@ export class CreateProductDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @ApiPropertyOptional({ description: 'Danh sách thành phần đầy đủ' })
+  @IsString()
+  @IsOptional()
+  ingredient_full_text?: string;
+
+  @ApiPropertyOptional({ description: 'Hướng dẫn sử dụng' })
+  @IsString()
+  @IsOptional()
+  usage_instructions?: string;
 
   @ApiPropertyOptional({ description: 'Tóm tắt ngắn sản phẩm' })
   @IsString()

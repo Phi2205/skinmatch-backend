@@ -13,6 +13,7 @@ import { ConcernsModule } from './modules/concerns/concerns.module.js';
 import { IngredientsModule } from './modules/ingredients/ingredients.module.js';
 import { BadgesModule } from './modules/badges/badges.module.js';
 import { UploadModule } from './modules/upload/upload.module.js';
+import { CacheModule } from './modules/cache/cache.module.js';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { UploadModule } from './modules/upload/upload.module.js';
     IngredientsModule,
     BadgesModule,
     UploadModule,
+    CacheModule,
   ],
 
   providers: [],

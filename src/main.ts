@@ -31,7 +31,10 @@ async function bootstrap() {
   SwaggerModule.setup('api', app, document);
 
   // Validation
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+  app.useGlobalPipes(new ValidationPipe({ 
+    whitelist: true,
+    transform: true,
+  }));
 
   // Apply interceptor globally
   app.useGlobalInterceptors(new LoggingInterceptor());

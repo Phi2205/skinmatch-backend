@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 
 @Injectable()
 export class ProductsRepository {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   // ─── Public queries ────────────────────────────────────
 
@@ -18,8 +18,18 @@ export class ProductsRepository {
     return this.prisma.products.findMany({
       where: { is_featured: true, is_active: true },
       include: {
+        product_images: true,
         product_badges: {
           include: { badges: true },
+        },
+        product_ingredients: {
+          include: { ingredients: true },
+        },
+        product_skin_types: {
+          include: { skin_types: true },
+        },
+        product_concerns: {
+          include: { concerns: true },
         },
       },
       take: limit,
@@ -132,9 +142,6 @@ export class ProductsRepository {
         where,
         include: {
           categories: true,
-          product_badges: {
-            include: { badges: true },
-          },
           product_images: true,
         },
         orderBy: { [safeSortBy]: sortOrder },
@@ -169,6 +176,75 @@ export class ProductsRepository {
     });
   }
 
+  async findBySlug(slug: string) {
+    return this.prisma.products.findUnique({
+      where: { slug },
+      include: {
+        categories: true,
+        product_images: true,
+        product_badges: {
+          include: { badges: true },
+        },
+        product_ingredients: {
+          include: { ingredients: true },
+        },
+        product_skin_types: {
+          include: { skin_types: true },
+        },
+        product_concerns: {
+          include: { concerns: true },
+        },
+      },
+    });
+  }
+
+  async findProductsByRelationSlug(params: {
+    type: 'category' | 'badge' | 'ingredient' | 'concern' | 'skin_type';
+    slug: string;
+    page?: number;
+    limit?: number;
+    onlyActive?: boolean;
+  }) {
+    const { type, slug, page = 1, limit = 10, onlyActive = true } = params;
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      is_active: onlyActive ? true : undefined,
+    };
+
+    if (type === 'category') {
+      where.categories = { slug };
+    } else if (type === 'badge') {
+      where.product_badges = { some: { badges: { slug } } };
+    } else if (type === 'ingredient') {
+      where.product_ingredients = { some: { ingredients: { slug } } };
+    } else if (type === 'concern') {
+      where.product_concerns = { some: { concerns: { slug } } };
+    } else if (type === 'skin_type') {
+      where.product_skin_types = { some: { skin_types: { slug } } };
+    }
+
+    const [items, totalItems] = await Promise.all([
+      this.prisma.products.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          summary: true,
+          price: true,
+          image_url: true,
+          slug: true,
+        },
+        orderBy: { created_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.products.count({ where }),
+    ]);
+
+    return { items, totalItems };
+  }
+
   // ─── Admin CRUD ────────────────────────────────────────
 
   async create(data: {
@@ -184,15 +260,19 @@ export class ProductsRepository {
     concern_ids?: number[];
     ingredient_ids?: number[];
     skin_type_ids?: number[];
+    ingredient_full_text?: string;
+    usage_instructions?: string;
+    slug: string;
   }) {
     const {
-      badge_ids, concern_ids, ingredient_ids, skin_type_ids,
+      badge_ids, concern_ids, ingredient_ids, skin_type_ids, category_id,
       ...productData
     } = data;
 
     return this.prisma.products.create({
       data: {
         ...productData,
+        categories: category_id ? { connect: { id: category_id } } : undefined,
         product_badges: badge_ids?.length
           ? { createMany: { data: badge_ids.map((id) => ({ badge_id: id })) } }
           : undefined,
@@ -232,10 +312,13 @@ export class ProductsRepository {
       concern_ids?: number[];
       ingredient_ids?: number[];
       skin_type_ids?: number[];
+      ingredient_full_text?: string;
+      usage_instructions?: string;
+      slug?: string;
     },
   ) {
     const {
-      badge_ids, concern_ids, ingredient_ids, skin_type_ids,
+      badge_ids, concern_ids, ingredient_ids, skin_type_ids, category_id,
       ...productData
     } = data;
 
@@ -281,7 +364,12 @@ export class ProductsRepository {
       // Update product scalar fields
       return tx.products.update({
         where: { id },
-        data: productData,
+        data: {
+          ...productData,
+          categories: category_id !== undefined
+            ? (category_id ? { connect: { id: category_id } } : { disconnect: true })
+            : undefined,
+        },
         include: {
           categories: true,
           product_badges: { include: { badges: true } },
@@ -309,13 +397,14 @@ export class ProductsRepository {
 
   // ─── Product Images ────────────────────────────────────
 
-  async addProductImage(productId: number, imageUrl: string, altText?: string, isMain = false) {
+  async addProductImage(productId: number, imageUrl: string, altText?: string, isMain = false, position = 0) {
     return this.prisma.product_images.create({
       data: {
         product_id: productId,
         image_url: imageUrl,
         alt_text: altText,
         is_main: isMain,
+        position: position,
       },
     });
   }
@@ -329,6 +418,20 @@ export class ProductsRepository {
   async findProductImageById(imageId: number) {
     return this.prisma.product_images.findUnique({
       where: { id: imageId },
+    });
+  }
+
+  async updateProductImage(imageId: number, data: any) {
+    return this.prisma.product_images.update({
+      where: { id: imageId },
+      data,
+    });
+  }
+
+  async findAllProductImages(productId: number) {
+    return this.prisma.product_images.findMany({
+      where: { product_id: productId },
+      orderBy: { position: 'asc' },
     });
   }
 }

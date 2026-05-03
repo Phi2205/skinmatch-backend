@@ -4,11 +4,12 @@ import { ProductsController } from './controllers/products.controller.js';
 import { ProductsRepository } from './repositories/products.repository.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module.js';
+import { RedisModule } from '../../redis/redis.module.js';
 
 @Module({
-  imports: [PrismaModule, CloudinaryModule],
+  imports: [PrismaModule, CloudinaryModule, RedisModule],
   controllers: [ProductsController],
   providers: [ProductsService, ProductsRepository],
   exports: [ProductsService],
 })
-export class ProductsModule {}
+export class ProductsModule { }

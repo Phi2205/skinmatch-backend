@@ -9,6 +9,8 @@ import { CreateProductDto } from '../dto/create-product.dto.js';
 import { UpdateProductDto } from '../dto/update-product.dto.js';
 import { UpdateProductStatusDto } from '../dto/update-product-status.dto.js';
 import { ProductFilterDto } from '../dto/product-filter.dto.js';
+import { UpdateProductImageDto } from '../dto/update-product-image.dto.js';
+import { ReorderProductImagesDto } from '../dto/reorder-product-images.dto.js';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service.js';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard.js';
 import { OptionalJwtAuthGuard } from '../../../common/guards/optional-jwt-auth.guard.js';
@@ -42,7 +44,7 @@ export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
     private readonly cloudinaryService: CloudinaryService,
-  ) {}
+  ) { }
 
   // ═══════════════════════════════════════════════════════
   //  PUBLIC ENDPOINTS
@@ -75,19 +77,69 @@ export class ProductsController {
   }
 
   @Get(':id')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get product detail by ID' })
-  async findOne(@Param('id') id: string) {
-    const data = await this.productsService.getProductDetail(Number(id));
+  async findOne(@Param('id') id: string, @Req() req: any) {
+    const isAdmin = req.user?.role === Role.ADMIN;
+    const data = await this.productsService.getProductDetail(Number(id), !isAdmin);
     if (!data) {
       return {
         success: false,
-        message: 'Product not found',
+        message: 'Product not found or inactive',
       };
     }
     return {
       success: true,
       message: 'Product detail fetched successfully',
       data,
+    };
+  }
+
+  @Get('slug/:slug')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get product detail by slug' })
+  async findBySlug(@Param('slug') slug: string, @Req() req: any) {
+    const isAdmin = req.user?.role === Role.ADMIN;
+    const data = await this.productsService.getProductBySlug(slug, !isAdmin);
+
+    if (!data) {
+      return {
+        success: false,
+        message: 'Product not found or inactive',
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Product detail fetched successfully',
+      data,
+    };
+  }
+
+  @Get('filter-by/:type/:slug')
+  @ApiOperation({ summary: 'Get products by a specific relation slug (category, badge, ingredient, concern, skin_type)' })
+  async findByRelation(
+    @Param('type') type: 'category' | 'badge' | 'ingredient' | 'concern' | 'skin_type',
+    @Param('slug') slug: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 10;
+
+    const { items, totalItems } = await this.productsService.getProductsByRelation({
+      type,
+      slug,
+      page: pageNum,
+      limit: limitNum,
+    });
+
+    const meta = createPaginationMeta(pageNum, limitNum, totalItems);
+
+    return {
+      success: true,
+      message: `Products for ${type} '${slug}' fetched successfully`,
+      data: { items, meta },
     };
   }
 
@@ -120,6 +172,8 @@ export class ProductsController {
         price: { type: 'number' },
         category_id: { type: 'number' },
         description: { type: 'string' },
+        ingredient_full_text: { type: 'string' },
+        usage_instructions: { type: 'string' },
         summary: { type: 'string' },
         is_featured: { type: 'boolean' },
         is_active: { type: 'boolean' },
@@ -187,6 +241,8 @@ export class ProductsController {
         price: { type: 'number' },
         category_id: { type: 'number' },
         description: { type: 'string' },
+        ingredient_full_text: { type: 'string' },
+        usage_instructions: { type: 'string' },
         summary: { type: 'string' },
         is_featured: { type: 'boolean' },
         is_active: { type: 'boolean' },
@@ -313,36 +369,244 @@ export class ProductsController {
     schema: {
       type: 'object',
       properties: {
-        images: { type: 'array', items: { type: 'string', format: 'binary' } },
+        images: { type: 'array', items: { type: 'string', format: 'binary' }, description: 'Danh sách các file ảnh' },
+        sequence: { type: 'string', description: 'JSON array mô tả thứ tự. Dùng "FILE" cho ảnh upload, hoặc truyền trực tiếp URL. Ví dụ: ["FILE", "http://...", "FILE"]' },
       },
     },
   })
-  @ApiOperation({ summary: 'Upload product images (Admin, max 10)' })
+  @ApiOperation({ summary: 'Add product images (Files or URLs) with precise ordering' })
   async addImages(
     @Param('id') id: string,
+    @Body() body: { sequence?: string },
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    if (!files || files.length === 0) {
-      throw new BadRequestException('At least one image is required');
+    // 1. Upload files to Cloudinary first
+    let cloudinaryResults: any[] = [];
+    if (files && files.length > 0) {
+      cloudinaryResults = await this.cloudinaryService.uploadImages(files, 'skinmatch/products');
     }
 
-    const results = await this.cloudinaryService.uploadImages(files, 'skinmatch/products');
-
-    const images: any[] = [];
-    for (let i = 0; i < results.length; i++) {
-      const img = await this.productsService.addProductImage(
-        +id,
-        results[i].secure_url,
-        undefined,
-        i === 0, // First image is main by default
-      );
-      images.push(img);
+    // 2. Parse sequence
+    let sequenceItems: string[] = [];
+    if (body.sequence) {
+      try {
+        sequenceItems = JSON.parse(body.sequence);
+      } catch {
+        sequenceItems = body.sequence.split(',').map(s => s.trim());
+      }
+    } else {
+      // Default behavior if no sequence: Files first, then any specific URLs if we had them (legacy)
+      sequenceItems = files.map(() => 'FILE');
     }
+
+    // 3. Map sequence to final URLs
+    const finalImages: { url: string; public_id: string | null }[] = [];
+    let fileIndex = 0;
+
+    for (const item of sequenceItems) {
+      if (item === 'FILE') {
+        if (fileIndex < cloudinaryResults.length) {
+          finalImages.push({
+            url: cloudinaryResults[fileIndex].secure_url,
+            public_id: cloudinaryResults[fileIndex].public_id,
+          });
+          fileIndex++;
+        }
+      } else if (item && item.startsWith('http')) {
+        finalImages.push({ url: item, public_id: null });
+      }
+    }
+
+    // Fallback: If there are uploaded files not in sequence, append them
+    while (fileIndex < cloudinaryResults.length) {
+      finalImages.push({
+        url: cloudinaryResults[fileIndex].secure_url,
+        public_id: cloudinaryResults[fileIndex].public_id,
+      });
+      fileIndex++;
+    }
+
+    if (finalImages.length === 0) {
+      throw new BadRequestException('At least one image (file or URL) is required');
+    }
+
+    const savedImages: any[] = [];
+    try {
+      for (let i = 0; i < finalImages.length; i++) {
+        const img = await this.productsService.addProductImage(
+          +id,
+          finalImages[i].url,
+          undefined,
+          i === 0, // First image is main by default
+          i,       // Order/Position
+        );
+        savedImages.push(img);
+      }
+
+      return {
+        success: true,
+        message: `${savedImages.length} image(s) added successfully`,
+        data: savedImages,
+      };
+    } catch (error) {
+      // Cleanup Cloudinary if DB fails
+      for (const res of cloudinaryResults) {
+        try {
+          await this.cloudinaryService.deleteImage(res.public_id);
+        } catch (delError) {
+          console.error('Failed to cleanup Cloudinary image after DB failure:', res.public_id, delError);
+        }
+      }
+      throw error;
+    }
+  }
+
+  @Post(':id/images/single')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth()
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (!file.mimetype.match(/^image\/(jpeg|png|gif|webp|svg\+xml)$/)) {
+          return cb(new BadRequestException('Only image files are allowed'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        image: { type: 'string', format: 'binary', description: 'File ảnh để upload' },
+        image_url: { type: 'string', description: 'URL ảnh (nếu không upload file)' },
+        alt_text: { type: 'string' },
+        is_main: { type: 'boolean' },
+        position: { type: 'number' },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Add a single product image (Admin)' })
+  async addSingleImage(
+    @Param('id') id: string,
+    @Body() body: any,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (isNaN(+id)) {
+      throw new BadRequestException('ID sản phẩm không hợp lệ');
+    }
+    let finalUrl = body.image_url;
+
+    if (file) {
+      const uploaded = await this.cloudinaryService.uploadImage(file, 'skinmatch/products');
+      finalUrl = uploaded.secure_url;
+    }
+
+    if (!finalUrl) {
+      throw new BadRequestException('At least one image (file or URL) is required');
+    }
+
+    const isMain = body.is_main === 'true' || body.is_main === true;
+    const position = body.position !== undefined ? Number(body.position) : undefined;
+
+    const data = await this.productsService.addProductImage(
+      +id,
+      finalUrl,
+      body.alt_text,
+      isMain,
+      position,
+    );
 
     return {
       success: true,
-      message: `${images.length} image(s) added successfully`,
-      data: images,
+      message: 'Product image added successfully',
+      data,
+    };
+  }
+
+  @Patch(':id/images/reorder')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reorder product images in bulk (Admin)' })
+  async reorderImages(
+    @Param('id') id: string,
+    @Body() dto: ReorderProductImagesDto,
+  ) {
+    if (isNaN(+id)) {
+      throw new BadRequestException('ID sản phẩm không hợp lệ');
+    }
+    const data = await this.productsService.reorderImagesBulk(+id, dto.images);
+    return {
+      success: true,
+      message: 'Product images reordered successfully',
+      data,
+    };
+  }
+
+  @Patch(':id/images/:imageId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth()
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (!file.mimetype.match(/^image\/(jpeg|png|gif|webp|svg\+xml)$/)) {
+          return cb(new BadRequestException('Only image files are allowed'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        image: { type: 'string', format: 'binary', description: 'File ảnh mới (nếu muốn upload)' },
+        image_url: { type: 'string', description: 'URL ảnh mới (nếu không upload file)' },
+        alt_text: { type: 'string' },
+        is_main: { type: 'boolean' },
+        position: { type: 'number' },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Update a specific product image (Admin)' })
+  async updateImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @Body() dto: UpdateProductImageDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (isNaN(+id) || isNaN(+imageId)) {
+      throw new BadRequestException('ID sản phẩm hoặc ID ảnh không hợp lệ');
+    }
+
+    if (file) {
+      const oldImage = await this.productsService.findImageById(+imageId);
+      if (oldImage && oldImage.image_url.includes('cloudinary')) {
+        try {
+          const publicId = this.cloudinaryService.extractPublicId(oldImage.image_url);
+          await this.cloudinaryService.deleteImage(publicId);
+        } catch { /* ignore */ }
+      }
+
+      const uploaded = await this.cloudinaryService.uploadImage(file, 'skinmatch/products');
+      dto.image_url = uploaded.secure_url;
+    }
+
+    if (typeof dto.position === 'string') dto.position = Number(dto.position);
+    if (typeof dto.is_main === 'string') dto.is_main = dto.is_main === 'true';
+
+    const data = await this.productsService.updateProductImage(+id, +imageId, dto);
+    return {
+      success: true,
+      message: 'Product image updated successfully',
+      data,
     };
   }
 
@@ -352,6 +616,9 @@ export class ProductsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a product image (Admin)' })
   async deleteImage(@Param('id') id: string, @Param('imageId') imageId: string) {
+    if (isNaN(+id) || isNaN(+imageId)) {
+      throw new BadRequestException('ID sản phẩm hoặc ID ảnh không hợp lệ');
+    }
     const image = await this.productsService.deleteProductImage(+imageId);
 
     // Cleanup from Cloudinary
