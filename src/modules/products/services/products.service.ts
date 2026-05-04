@@ -40,17 +40,28 @@ export class ProductsService {
       this.repository.findFeaturedProducts(10),
     ]);
 
-    const formattedProducts = featuredProducts.map((product) => ({
-      ...product,
-      badges: product.product_badges.map((pb) => pb.badges),
-      concerns: product.product_concerns.map((pc) => pc.concerns),
-      ingredients: product.product_ingredients.map((pi) => pi.ingredients),
-      skin_types: product.product_skin_types.map((ps) => ps.skin_types),
-      product_badges: undefined,
-      product_concerns: undefined,
-      product_ingredients: undefined,
-      product_skin_types: undefined,
-    }));
+    const formattedProducts = featuredProducts.map((product) => {
+      const minPrice = product.product_variants?.length
+        ? Math.min(...product.product_variants.map((v) => v.price))
+        : 0;
+
+      return {
+        ...product,
+        price: minPrice,
+        variants: product.product_variants,
+        badges: product.product_badges.map((pb) => pb.badges),
+        concerns: product.product_concerns.map((pc) => pc.concerns),
+        ingredients: product.product_ingredients.map((pi) => pi.ingredients),
+        skin_types: product.product_skin_types.map((ps) => ps.skin_types),
+        categories: product.product_categories.map((pc) => pc.categories),
+        product_badges: undefined,
+        product_concerns: undefined,
+        product_ingredients: undefined,
+        product_skin_types: undefined,
+        product_categories: undefined,
+        product_variants: undefined,
+      };
+    });
 
     return {
       banners,
@@ -72,7 +83,7 @@ export class ProductsService {
       sortBy: query.sortBy,
       sortOrder: query.sortOrder,
       onlyActive,
-      category_id: query.category_id,
+      category_ids: parseIds(query.category_ids),
       is_featured: query.is_featured,
       is_active: query.is_active,
       min_price: query.min_price,
@@ -83,11 +94,22 @@ export class ProductsService {
       badge_ids: parseIds(query.badge_ids),
     });
 
-    const formattedItems = items.map((product) => ({
-      ...product,
-      images: product.product_images.sort((a, b) => a.position - b.position),
-      product_images: undefined,
-    }));
+    const formattedItems = items.map((product) => {
+      const minPrice = product.product_variants?.length
+        ? Math.min(...product.product_variants.map((v) => v.price))
+        : 0;
+
+      return {
+        ...product,
+        price: minPrice,
+        variants: product.product_variants,
+        images: product.product_images.sort((a, b) => a.position - b.position),
+        categories: product.product_categories.map((pc) => pc.categories),
+        product_images: undefined,
+        product_categories: undefined,
+        product_variants: undefined,
+      };
+    });
 
     return { items: formattedItems, totalItems };
   }
@@ -98,18 +120,27 @@ export class ProductsService {
     if (!product) return null;
     if (onlyActive && !product.is_active) return null;
 
+    const minPrice = product.product_variants?.length
+      ? Math.min(...product.product_variants.map((v) => v.price))
+      : 0;
+
     return {
       ...product,
+      price: minPrice,
+      variants: product.product_variants,
       images: product.product_images.sort((a, b) => a.position - b.position),
       badges: product.product_badges.map((pb) => pb.badges),
       concerns: product.product_concerns.map((pc) => pc.concerns),
       ingredients: product.product_ingredients.map((pi) => pi.ingredients),
       skin_types: product.product_skin_types.map((ps) => ps.skin_types),
+      categories: product.product_categories.map((pc) => pc.categories),
       product_images: undefined,
       product_badges: undefined,
       product_concerns: undefined,
       product_ingredients: undefined,
       product_skin_types: undefined,
+      product_categories: undefined,
+      product_variants: undefined,
     };
   }
 
@@ -145,18 +176,27 @@ export class ProductsService {
     if (!product) return null;
     if (onlyActive && !product.is_active) return null;
 
+    const minPrice = product.product_variants?.length
+      ? Math.min(...product.product_variants.map((v) => v.price))
+      : 0;
+
     return {
       ...product,
+      price: minPrice,
+      variants: product.product_variants,
       images: product.product_images.sort((a, b) => a.position - b.position),
       badges: product.product_badges.map((pb) => pb.badges),
       concerns: product.product_concerns.map((pc) => pc.concerns),
       ingredients: product.product_ingredients.map((pi) => pi.ingredients),
       skin_types: product.product_skin_types.map((ps) => ps.skin_types),
+      categories: product.product_categories.map((pc) => pc.categories),
       product_images: undefined,
       product_badges: undefined,
       product_concerns: undefined,
       product_ingredients: undefined,
       product_skin_types: undefined,
+      product_categories: undefined,
+      product_variants: undefined,
     };
   }
 
@@ -178,7 +218,9 @@ export class ProductsService {
   async update(id: number, dto: UpdateProductDto) {
     await this.findOne(id);
     let slug: string | undefined;
-    if (dto.name) {
+    if (dto.slug) {
+      slug = await this.generateUniqueSlug(dto.slug, id);
+    } else if (dto.name) {
       slug = await this.generateUniqueSlug(dto.name, id);
     }
     return this.repository.update(id, { ...dto, slug });

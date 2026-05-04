@@ -170,7 +170,6 @@ export class ProductsController {
       properties: {
         name: { type: 'string' },
         price: { type: 'number' },
-        category_id: { type: 'number' },
         description: { type: 'string' },
         ingredient_full_text: { type: 'string' },
         usage_instructions: { type: 'string' },
@@ -179,6 +178,8 @@ export class ProductsController {
         is_active: { type: 'boolean' },
         image_url: { type: 'string' },
         image: { type: 'string', format: 'binary', description: 'Ảnh chính (ưu tiên hơn image_url)' },
+        variants: { type: 'string', description: 'JSON array mảng dung tích và giá, e.g. [{"volume": "50ml", "price": 100000}]' },
+        category_ids: { type: 'string', description: 'JSON array mảng danh mục IDs, e.g. [1,2]' },
         badge_ids: { type: 'string', description: 'JSON array, e.g. [1,2]' },
         concern_ids: { type: 'string', description: 'JSON array, e.g. [1,3]' },
         ingredient_ids: { type: 'string', description: 'JSON array, e.g. [2,5]' },
@@ -197,15 +198,7 @@ export class ProductsController {
       dto.image_url = uploaded.secure_url;
     }
 
-    // Parse relation arrays from form-data
-    dto.badge_ids = parseIntArray(dto.badge_ids);
-    dto.concern_ids = parseIntArray(dto.concern_ids);
-    dto.ingredient_ids = parseIntArray(dto.ingredient_ids);
-    dto.skin_type_ids = parseIntArray(dto.skin_type_ids);
-
     // Parse numeric/boolean from form-data strings
-    if (typeof dto.price === 'string') dto.price = Number(dto.price);
-    if (typeof dto.category_id === 'string') dto.category_id = Number(dto.category_id);
     if (typeof dto.is_featured === 'string') dto.is_featured = dto.is_featured === 'true';
     if (typeof dto.is_active === 'string') dto.is_active = dto.is_active === 'true';
 
@@ -239,7 +232,6 @@ export class ProductsController {
       properties: {
         name: { type: 'string' },
         price: { type: 'number' },
-        category_id: { type: 'number' },
         description: { type: 'string' },
         ingredient_full_text: { type: 'string' },
         usage_instructions: { type: 'string' },
@@ -248,6 +240,8 @@ export class ProductsController {
         is_active: { type: 'boolean' },
         image_url: { type: 'string' },
         image: { type: 'string', format: 'binary' },
+        variants: { type: 'string', description: 'JSON array mảng dung tích và giá, e.g. [{"volume": "50ml", "price": 100000}]' },
+        category_ids: { type: 'string', description: 'JSON array mảng danh mục IDs, e.g. [1,2]' },
         badge_ids: { type: 'string', description: 'JSON array, e.g. [1,2]' },
         concern_ids: { type: 'string', description: 'JSON array, e.g. [1,3]' },
         ingredient_ids: { type: 'string', description: 'JSON array, e.g. [2,5]' },
@@ -275,15 +269,7 @@ export class ProductsController {
       dto.image_url = uploaded.secure_url;
     }
 
-    // Parse relation arrays
-    dto.badge_ids = parseIntArray(dto.badge_ids);
-    dto.concern_ids = parseIntArray(dto.concern_ids);
-    dto.ingredient_ids = parseIntArray(dto.ingredient_ids);
-    dto.skin_type_ids = parseIntArray(dto.skin_type_ids);
-
     // Parse numeric/boolean from form-data strings
-    if (typeof dto.price === 'string') dto.price = Number(dto.price);
-    if (typeof dto.category_id === 'string') dto.category_id = Number(dto.category_id);
     if (typeof dto.is_featured === 'string') dto.is_featured = dto.is_featured === 'true';
     if (typeof dto.is_active === 'string') dto.is_active = dto.is_active === 'true';
 

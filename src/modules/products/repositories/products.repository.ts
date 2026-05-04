@@ -31,6 +31,10 @@ export class ProductsRepository {
         product_concerns: {
           include: { concerns: true },
         },
+        product_categories: {
+          include: { categories: true },
+        },
+        product_variants: true,
       },
       take: limit,
     });
@@ -43,7 +47,7 @@ export class ProductsRepository {
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
     onlyActive?: boolean;
-    category_id?: number;
+    category_ids?: number[];
     is_featured?: boolean;
     is_active?: boolean;
     min_price?: number;
@@ -57,7 +61,7 @@ export class ProductsRepository {
       page, limit, search,
       sortBy = 'created_at', sortOrder = 'desc',
       onlyActive = true,
-      category_id, is_featured, is_active,
+      category_ids, is_featured, is_active,
       min_price, max_price,
       concern_ids, ingredient_ids, skin_type_ids, badge_ids,
     } = params;
@@ -80,8 +84,13 @@ export class ProductsRepository {
     }
 
     // Category filter
-    if (category_id) {
-      where.category_id = category_id;
+    if (category_ids?.length) {
+      where.AND = [
+        ...(where.AND || []),
+        ...category_ids.map((id) => ({
+          product_categories: { some: { category_id: id } },
+        })),
+      ];
     }
 
     // Featured filter
@@ -89,11 +98,16 @@ export class ProductsRepository {
       where.is_featured = is_featured;
     }
 
-    // Price range
+    // Price range - filter products that have at least one variant within price range
     if (min_price !== undefined || max_price !== undefined) {
-      where.price = {};
-      if (min_price !== undefined) where.price.gte = min_price;
-      if (max_price !== undefined) where.price.lte = max_price;
+      where.product_variants = {
+        some: {
+          price: {
+            gte: min_price,
+            lte: max_price,
+          }
+        }
+      };
     }
 
     // Filter by relation IDs — product must have ALL specified IDs
@@ -134,15 +148,18 @@ export class ProductsRepository {
     }
 
     // Validate sortBy to prevent injection
-    const allowedSortFields = ['name', 'price', 'created_at', 'id'];
+    const allowedSortFields = ['name', 'created_at', 'id'];
     const safeSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
 
     const [items, totalItems] = await Promise.all([
       this.prisma.products.findMany({
         where,
         include: {
-          categories: true,
+          product_categories: {
+            include: { categories: true },
+          },
           product_images: true,
+          product_variants: true,
         },
         orderBy: { [safeSortBy]: sortOrder },
         skip,
@@ -158,7 +175,9 @@ export class ProductsRepository {
     return this.prisma.products.findUnique({
       where: { id },
       include: {
-        categories: true,
+        product_categories: {
+          include: { categories: true },
+        },
         product_images: true,
         product_badges: {
           include: { badges: true },
@@ -172,6 +191,7 @@ export class ProductsRepository {
         product_concerns: {
           include: { concerns: true },
         },
+        product_variants: true,
       },
     });
   }
@@ -180,7 +200,9 @@ export class ProductsRepository {
     return this.prisma.products.findUnique({
       where: { slug },
       include: {
-        categories: true,
+        product_categories: {
+          include: { categories: true },
+        },
         product_images: true,
         product_badges: {
           include: { badges: true },
@@ -194,6 +216,7 @@ export class ProductsRepository {
         product_concerns: {
           include: { concerns: true },
         },
+        product_variants: true,
       },
     });
   }
@@ -213,7 +236,7 @@ export class ProductsRepository {
     };
 
     if (type === 'category') {
-      where.categories = { slug };
+      where.product_categories = { some: { categories: { slug } } };
     } else if (type === 'badge') {
       where.product_badges = { some: { badges: { slug } } };
     } else if (type === 'ingredient') {
@@ -231,9 +254,9 @@ export class ProductsRepository {
           id: true,
           name: true,
           summary: true,
-          price: true,
           image_url: true,
           slug: true,
+          product_variants: true,
         },
         orderBy: { created_at: 'desc' },
         skip,
@@ -242,15 +265,26 @@ export class ProductsRepository {
       this.prisma.products.count({ where }),
     ]);
 
-    return { items, totalItems };
+    const formattedItems = items.map((product) => {
+      const minPrice = product.product_variants?.length
+        ? Math.min(...product.product_variants.map((v) => v.price))
+        : 0;
+      return {
+        ...product,
+        price: minPrice,
+        variants: product.product_variants,
+        product_variants: undefined,
+      };
+    });
+
+    return { items: formattedItems, totalItems };
   }
 
   // ─── Admin CRUD ────────────────────────────────────────
 
   async create(data: {
     name: string;
-    price: number;
-    category_id?: number;
+    category_ids?: number[];
     description?: string;
     summary?: string;
     image_url?: string;
@@ -263,16 +297,19 @@ export class ProductsRepository {
     ingredient_full_text?: string;
     usage_instructions?: string;
     slug: string;
+    variants?: { volume: string; price: number; sku?: string; stock?: number }[];
   }) {
     const {
-      badge_ids, concern_ids, ingredient_ids, skin_type_ids, category_id,
+      badge_ids, concern_ids, ingredient_ids, skin_type_ids, category_ids, variants,
       ...productData
     } = data;
 
     return this.prisma.products.create({
       data: {
         ...productData,
-        categories: category_id ? { connect: { id: category_id } } : undefined,
+        product_categories: category_ids?.length
+          ? { createMany: { data: category_ids.map((id) => ({ category_id: id })) } }
+          : undefined,
         product_badges: badge_ids?.length
           ? { createMany: { data: badge_ids.map((id) => ({ badge_id: id })) } }
           : undefined,
@@ -285,14 +322,18 @@ export class ProductsRepository {
         product_skin_types: skin_type_ids?.length
           ? { createMany: { data: skin_type_ids.map((id) => ({ skin_type_id: id })) } }
           : undefined,
+        product_variants: variants?.length
+          ? { createMany: { data: variants } }
+          : undefined,
       },
       include: {
-        categories: true,
+        product_categories: { include: { categories: true } },
         product_badges: { include: { badges: true } },
         product_concerns: { include: { concerns: true } },
         product_ingredients: { include: { ingredients: true } },
         product_skin_types: { include: { skin_types: true } },
         product_images: true,
+        product_variants: true,
       },
     });
   }
@@ -301,24 +342,23 @@ export class ProductsRepository {
     id: number,
     data: {
       name?: string;
-      price?: number;
-      category_id?: number;
-      description?: string;
-      summary?: string;
-      image_url?: string;
-      is_featured?: boolean;
-      is_active?: boolean;
-      badge_ids?: number[];
-      concern_ids?: number[];
-      ingredient_ids?: number[];
-      skin_type_ids?: number[];
-      ingredient_full_text?: string;
-      usage_instructions?: string;
-      slug?: string;
-    },
-  ) {
+    category_ids?: number[];
+    description?: string;
+    summary?: string;
+    image_url?: string;
+    is_featured?: boolean;
+    is_active?: boolean;
+    badge_ids?: number[];
+    concern_ids?: number[];
+    ingredient_ids?: number[];
+    skin_type_ids?: number[];
+    ingredient_full_text?: string;
+    usage_instructions?: string;
+    slug?: string;
+    variants?: { volume: string; price: number; sku?: string; stock?: number }[];
+  }) {
     const {
-      badge_ids, concern_ids, ingredient_ids, skin_type_ids, category_id,
+      badge_ids, concern_ids, ingredient_ids, skin_type_ids, category_ids, variants,
       ...productData
     } = data;
 
@@ -361,22 +401,36 @@ export class ProductsRepository {
         }
       }
 
+      if (category_ids !== undefined) {
+        await tx.product_categories.deleteMany({ where: { product_id: id } });
+        if (category_ids.length) {
+          await tx.product_categories.createMany({
+            data: category_ids.map((category_id) => ({ product_id: id, category_id })),
+          });
+        }
+      }
+
+      if (variants !== undefined) {
+        await tx.product_variants.deleteMany({ where: { product_id: id } });
+        if (variants.length) {
+          await tx.product_variants.createMany({
+            data: variants.map((v) => ({ ...v, product_id: id })),
+          });
+        }
+      }
+
       // Update product scalar fields
       return tx.products.update({
         where: { id },
-        data: {
-          ...productData,
-          categories: category_id !== undefined
-            ? (category_id ? { connect: { id: category_id } } : { disconnect: true })
-            : undefined,
-        },
+        data: productData,
         include: {
-          categories: true,
+          product_categories: { include: { categories: true } },
           product_badges: { include: { badges: true } },
           product_concerns: { include: { concerns: true } },
           product_ingredients: { include: { ingredients: true } },
           product_skin_types: { include: { skin_types: true } },
           product_images: true,
+          product_variants: true,
         },
       });
     });

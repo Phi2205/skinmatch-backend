@@ -35,11 +35,10 @@ export class ProductFilterDto {
 
   // ─── Filters ───────────────────────────────────────────
 
-  @ApiPropertyOptional({ description: 'Lọc theo category ID' })
-  @Type(() => Number)
-  @IsInt()
+  @ApiPropertyOptional({ description: 'Lọc theo category IDs (comma-separated, VD: 1,2)' })
+  @IsString()
   @IsOptional()
-  category_id?: number;
+  category_ids?: string;
 
   @ApiPropertyOptional({ description: 'Lọc theo concern IDs (comma-separated, VD: 1,2,3)' })
   @IsString()
