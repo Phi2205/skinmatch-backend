@@ -11,14 +11,17 @@ datasource db {
 }
 
 model categories {
-  id       Int        @id @default(autoincrement())
-  name     String     @unique @db.VarChar(100)
-  products products[]
+  id                 Int                  @id @default(autoincrement())
+  name               String               @unique @db.VarChar(100)
+  slug               String               @unique @db.VarChar(100)
+  is_active          Boolean              @default(true)
+  product_categories product_categories[]
 }
 
 model concerns {
   id               Int                @id @default(autoincrement())
   name             String             @unique @db.VarChar(100)
+  slug             String             @unique @db.VarChar(100)
   product_concerns product_concerns[]
   user_concerns    user_concerns[]
 }
@@ -26,17 +29,24 @@ model concerns {
 model ingredients {
   id                  Int                   @id @default(autoincrement())
   name                String                @unique @db.VarChar(100)
+  slug                String                @unique @db.VarChar(100)
   product_ingredients product_ingredients[]
 }
 
 model order_items {
-  id         Int       @id @default(autoincrement())
-  order_id   Int?
-  product_id Int?
-  quantity   Int?
-  price      Int?
-  orders     orders?   @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  products   products? @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id          Int               @id @default(autoincrement())
+  order_id    Int?
+  product_id  Int?
+  variant_id  Int?
+  quantity    Int?
+  price       Int?
+  orders      orders?           @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products    products?         @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variants    product_variants? @relation(fields: [variant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([order_id], map: "idx_order_items_order")
+  @@index([product_id], map: "idx_order_items_product")
+  @@index([variant_id], map: "idx_order_items_variant")
 }
 
 model orders {
@@ -56,6 +66,8 @@ model product_concerns {
   products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([product_id, concern_id])
+  @@index([product_id], map: "idx_product_concerns_product")
+  @@index([concern_id], map: "idx_product_concerns_concern")
 }
 
 model product_ingredients {
@@ -65,24 +77,42 @@ model product_ingredients {
   products      products    @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([product_id, ingredient_id])
+  @@index([product_id], map: "idx_product_ingredients_product")
+  @@index([ingredient_id], map: "idx_product_ingredients_ingredient")
 }
 
 model product_skin_types {
-  product_id Int
-  skin_type  String   @db.VarChar(50)
-  products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product_id   Int
+  skin_type_id Int
+  products     products   @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  skin_types   skin_types @relation(fields: [skin_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@id([product_id, skin_type])
+  @@id([product_id, skin_type_id])
+  @@index([product_id], map: "idx_product_skin_types_product")
+  @@index([skin_type_id], map: "idx_product_skin_types_skin_type")
+}
+
+model product_categories {
+  product_id  Int
+  category_id Int
+  categories  categories @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products    products   @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([product_id, category_id])
+  @@index([product_id], map: "idx_product_categories_product")
+  @@index([category_id], map: "idx_product_categories_category")
 }
 
 model products {
   id                  Int                   @id @default(autoincrement())
   name                String                @db.VarChar(255)
-  price               Int
-  category_id         Int?
-  description         String?
+  slug                String                @unique @db.VarChar(255)
+  description         String?               @db.Text
+  ingredient_full_text String?              @db.Text
+  usage_instructions  String?               @db.Text
   image_url           String?               @db.VarChar(255)
   is_featured         Boolean               @default(false)
+  is_active           Boolean               @default(true)
   summary             String?               @db.VarChar(255)
   created_at          DateTime?             @default(now()) @db.Timestamp(6)
   order_items         order_items[]
@@ -90,10 +120,35 @@ model products {
   product_ingredients product_ingredients[]
   product_skin_types  product_skin_types[]
   product_badges      product_badges[]
-  categories          categories?           @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product_images      product_images[]
+  product_categories  product_categories[]
+  product_variants    product_variants[]
   user_behaviors      user_behaviors[]
+}
 
-  @@index([category_id], map: "idx_product_category")
+model product_variants {
+  id          Int           @id @default(autoincrement())
+  product_id  Int
+  volume      String        @db.VarChar(50) // e.g. "50ml", "100g"
+  price       Int
+  sku         String?       @unique @db.VarChar(100)
+  stock       Int           @default(0)
+  products    products      @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  order_items order_items[]
+
+  @@index([product_id], map: "idx_product_variants_product")
+}
+
+model product_images {
+  id         Int      @id @default(autoincrement())
+  product_id Int
+  image_url  String   @db.VarChar(255)
+  alt_text   String?  @db.VarChar(255)
+  is_main    Boolean  @default(false)
+  position   Int      @default(0)
+  products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([product_id], map: "idx_product_images_product")
 }
 
 model banners {
@@ -111,6 +166,7 @@ model banners {
 model badges {
   id             Int              @id @default(autoincrement())
   name           String           @unique @db.VarChar(100)
+  slug           String           @unique @db.VarChar(100)
   icon_url       String?          @db.VarChar(255)
   product_badges product_badges[]
 }
@@ -122,16 +178,27 @@ model product_badges {
   products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([product_id, badge_id])
+  @@index([product_id], map: "idx_product_badges_product")
+  @@index([badge_id], map: "idx_product_badges_badge")
 }
 
-
 model skin_profiles {
-  id          Int       @id @default(autoincrement())
-  user_id     Int?      @unique
-  skin_type   String    @db.VarChar(50)
-  sensitivity String?   @db.VarChar(50)
-  created_at  DateTime? @default(now()) @db.Timestamp(6)
-  users       users?    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id           Int         @id @default(autoincrement())
+  user_id      Int?        @unique
+  skin_type_id Int?
+  sensitivity  String?     @db.VarChar(50)
+  created_at   DateTime?   @default(now()) @db.Timestamp(6)
+  users        users?      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  skin_types   skin_types? @relation(fields: [skin_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model skin_types {
+  id                 Int                  @id @default(autoincrement())
+  name               String               @unique @db.VarChar(50)
+  slug               String               @unique @db.VarChar(50)
+  description        String?
+  product_skin_types product_skin_types[]
+  skin_profiles      skin_profiles[]
 }
 
 model user_behaviors {
