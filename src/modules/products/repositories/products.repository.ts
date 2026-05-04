@@ -159,7 +159,9 @@ export class ProductsRepository {
             include: { categories: true },
           },
           product_images: true,
-          product_variants: true,
+          product_variants: {
+            include: { attributes: true }
+          },
         },
         orderBy: { [safeSortBy]: sortOrder },
         skip,
@@ -191,7 +193,9 @@ export class ProductsRepository {
         product_concerns: {
           include: { concerns: true },
         },
-        product_variants: true,
+        product_variants: {
+          include: { attributes: true }
+        },
       },
     });
   }
@@ -216,7 +220,9 @@ export class ProductsRepository {
         product_concerns: {
           include: { concerns: true },
         },
-        product_variants: true,
+        product_variants: {
+          include: { attributes: true }
+        },
       },
     });
   }
@@ -256,7 +262,9 @@ export class ProductsRepository {
           summary: true,
           image_url: true,
           slug: true,
-          product_variants: true,
+          product_variants: {
+            include: { attributes: true }
+          },
         },
         orderBy: { created_at: 'desc' },
         skip,
@@ -297,7 +305,12 @@ export class ProductsRepository {
     ingredient_full_text?: string;
     usage_instructions?: string;
     slug: string;
-    variants?: { volume: string; price: number; sku?: string; stock?: number }[];
+    variants?: { 
+      price: number; 
+      sku?: string; 
+      stock?: number;
+      attributes?: { name: string; value: string }[] 
+    }[];
   }) {
     const {
       badge_ids, concern_ids, ingredient_ids, skin_type_ids, category_ids, variants,
@@ -323,7 +336,16 @@ export class ProductsRepository {
           ? { createMany: { data: skin_type_ids.map((id) => ({ skin_type_id: id })) } }
           : undefined,
         product_variants: variants?.length
-          ? { createMany: { data: variants } }
+          ? {
+            create: variants.map((v) => ({
+              price: v.price,
+              sku: v.sku,
+              stock: v.stock,
+              attributes: v.attributes?.length
+                ? { create: v.attributes }
+                : undefined,
+            })),
+          }
           : undefined,
       },
       include: {
@@ -333,7 +355,9 @@ export class ProductsRepository {
         product_ingredients: { include: { ingredients: true } },
         product_skin_types: { include: { skin_types: true } },
         product_images: true,
-        product_variants: true,
+        product_variants: {
+          include: { attributes: true }
+        },
       },
     });
   }
@@ -355,7 +379,12 @@ export class ProductsRepository {
     ingredient_full_text?: string;
     usage_instructions?: string;
     slug?: string;
-    variants?: { volume: string; price: number; sku?: string; stock?: number }[];
+    variants?: { 
+      price: number; 
+      sku?: string; 
+      stock?: number;
+      attributes?: { name: string; value: string }[] 
+    }[];
   }) {
     const {
       badge_ids, concern_ids, ingredient_ids, skin_type_ids, category_ids, variants,
@@ -413,9 +442,19 @@ export class ProductsRepository {
       if (variants !== undefined) {
         await tx.product_variants.deleteMany({ where: { product_id: id } });
         if (variants.length) {
-          await tx.product_variants.createMany({
-            data: variants.map((v) => ({ ...v, product_id: id })),
-          });
+          for (const v of variants) {
+            await tx.product_variants.create({
+              data: {
+                product_id: id,
+                price: v.price,
+                sku: v.sku,
+                stock: v.stock,
+                attributes: v.attributes?.length
+                  ? { create: v.attributes }
+                  : undefined,
+              },
+            });
+          }
         }
       }
 
@@ -430,7 +469,9 @@ export class ProductsRepository {
           product_ingredients: { include: { ingredients: true } },
           product_skin_types: { include: { skin_types: true } },
           product_images: true,
-          product_variants: true,
+          product_variants: {
+            include: { attributes: true }
+          },
         },
       });
     });

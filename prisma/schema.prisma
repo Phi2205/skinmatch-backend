@@ -34,15 +34,15 @@ model ingredients {
 }
 
 model order_items {
-  id          Int               @id @default(autoincrement())
-  order_id    Int?
-  product_id  Int?
-  variant_id  Int?
-  quantity    Int?
-  price       Int?
-  orders      orders?           @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  products    products?         @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  variants    product_variants? @relation(fields: [variant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id         Int               @id @default(autoincrement())
+  order_id   Int?
+  product_id Int?
+  variant_id Int?
+  quantity   Int?
+  price      Int?
+  orders     orders?           @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products   products?         @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variants   product_variants? @relation(fields: [variant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([order_id], map: "idx_order_items_order")
   @@index([product_id], map: "idx_order_items_product")
@@ -104,39 +104,51 @@ model product_categories {
 }
 
 model products {
-  id                  Int                   @id @default(autoincrement())
-  name                String                @db.VarChar(255)
-  slug                String                @unique @db.VarChar(255)
-  description         String?               @db.Text
-  ingredient_full_text String?              @db.Text
-  usage_instructions  String?               @db.Text
-  image_url           String?               @db.VarChar(255)
-  is_featured         Boolean               @default(false)
-  is_active           Boolean               @default(true)
-  summary             String?               @db.VarChar(255)
-  created_at          DateTime?             @default(now()) @db.Timestamp(6)
-  order_items         order_items[]
-  product_concerns    product_concerns[]
-  product_ingredients product_ingredients[]
-  product_skin_types  product_skin_types[]
-  product_badges      product_badges[]
-  product_images      product_images[]
-  product_categories  product_categories[]
-  product_variants    product_variants[]
-  user_behaviors      user_behaviors[]
+  id                   Int                   @id @default(autoincrement())
+  name                 String                @db.VarChar(255)
+  slug                 String                @unique @db.VarChar(255)
+  description          String?               @db.Text
+  ingredient_full_text String?               @db.Text
+  usage_instructions   String?               @db.Text
+  image_url            String?               @db.VarChar(255)
+  is_featured          Boolean               @default(false)
+  is_active            Boolean               @default(true)
+  summary              String?               @db.VarChar(255)
+  created_at           DateTime?             @default(now()) @db.Timestamp(6)
+  order_items          order_items[]
+  product_concerns     product_concerns[]
+  product_ingredients  product_ingredients[]
+  product_skin_types   product_skin_types[]
+  product_badges       product_badges[]
+  product_images       product_images[]
+  product_categories   product_categories[]
+  product_variants     product_variants[]
+  user_behaviors       user_behaviors[]
+  cart_items           cart_items[]
 }
 
 model product_variants {
-  id          Int           @id @default(autoincrement())
+  id          Int                  @id @default(autoincrement())
   product_id  Int
-  volume      String        @db.VarChar(50) // e.g. "50ml", "100g"
   price       Int
-  sku         String?       @unique @db.VarChar(100)
-  stock       Int           @default(0)
-  products    products      @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sku         String?              @unique @db.VarChar(100)
+  stock       Int                  @default(0)
+  products    products             @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   order_items order_items[]
+  cart_items  cart_items[]
+  attributes  variant_attributes[]
 
   @@index([product_id], map: "idx_product_variants_product")
+}
+
+model variant_attributes {
+  id         Int              @id @default(autoincrement())
+  variant_id Int
+  name       String           @db.VarChar(100) // "volume", "color", "size"
+  value      String           @db.VarChar(255)
+  variants   product_variants @relation(fields: [variant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([variant_id], map: "idx_variant_attributes_variant")
 }
 
 model product_images {
@@ -235,6 +247,25 @@ model users {
   skin_profiles  skin_profiles?
   user_behaviors user_behaviors[]
   user_concerns  user_concerns[]
+  cart_items     cart_items[]
+}
+
+model cart_items {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  product_id Int
+  variant_id Int?
+  quantity   Int      @default(1)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @db.Timestamp(6)
+
+  users    users             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products products          @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  variants product_variants? @relation(fields: [variant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "idx_cart_items_user")
+  @@index([product_id], map: "idx_cart_items_product")
+  @@index([variant_id], map: "idx_cart_items_variant")
 }
 
 enum Role {

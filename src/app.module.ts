@@ -14,6 +14,7 @@ import { IngredientsModule } from './modules/ingredients/ingredients.module.js';
 import { BadgesModule } from './modules/badges/badges.module.js';
 import { UploadModule } from './modules/upload/upload.module.js';
 import { CacheModule } from './modules/cache/cache.module.js';
+import { CartsModule } from './modules/carts/carts.module.js';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { CacheModule } from './modules/cache/cache.module.js';
     BadgesModule,
     UploadModule,
     CacheModule,
+    CartsModule,
   ],
 
   providers: [],
