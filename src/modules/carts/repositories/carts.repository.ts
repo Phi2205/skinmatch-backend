@@ -73,8 +73,9 @@ export class CartsRepository {
     });
   }
 
-  async clearCart(userId: number) {
-    return this.prisma.cart_items.deleteMany({
+  async clearCart(userId: number, tx?: any) {
+    const prisma = tx || this.prisma;
+    return prisma.cart_items.deleteMany({
       where: { user_id: userId },
     });
   }

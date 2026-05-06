@@ -15,6 +15,8 @@ import { BadgesModule } from './modules/badges/badges.module.js';
 import { UploadModule } from './modules/upload/upload.module.js';
 import { CacheModule } from './modules/cache/cache.module.js';
 import { CartsModule } from './modules/carts/carts.module.js';
+import { PaymentsModule } from './modules/payments/payments.module.js';
+import { OrdersModule } from './modules/orders/orders.module.js';
 
 @Module({
   imports: [
@@ -48,6 +50,8 @@ import { CartsModule } from './modules/carts/carts.module.js';
     UploadModule,
     CacheModule,
     CartsModule,
+    PaymentsModule,
+    OrdersModule,
   ],
 
   providers: [],

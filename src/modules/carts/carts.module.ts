@@ -8,6 +8,6 @@ import { PrismaModule } from '../prisma/prisma.module.js';
   imports: [PrismaModule],
   controllers: [CartsController],
   providers: [CartsService, CartsRepository],
-  exports: [CartsService],
+  exports: [CartsService, CartsRepository],
 })
 export class CartsModule { }

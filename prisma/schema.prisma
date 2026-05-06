@@ -50,13 +50,31 @@ model order_items {
 }
 
 model orders {
-  id          Int           @id @default(autoincrement())
-  user_id     Int?
-  total_price Int?
-  status      String?       @db.VarChar(50)
-  created_at  DateTime?     @default(now()) @db.Timestamp(6)
-  order_items order_items[]
-  users       users?        @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                   Int                    @id @default(autoincrement())
+  user_id              Int?
+
+  // 💥 THÔNG TIN NGƯỜI NHẬN (snapshot tại thời điểm đặt)
+  receiver_name        String                 @db.VarChar(255)
+  receiver_phone       String                 @db.VarChar(20)
+  receiver_email       String?                @db.VarChar(255)
+
+  address_line         String                 @db.VarChar(255)
+  ward                 String?                @db.VarChar(100)
+  district             String?                @db.VarChar(100)
+  city                 String?                @db.VarChar(100)
+
+  note                 String?                @db.Text
+
+  total_price          Int
+  status               String                 @db.VarChar(50)
+  payment_method       String                 @default("COD") @db.VarChar(50)
+
+
+  created_at           DateTime               @default(now()) @db.Timestamp(6)
+
+  order_items          order_items[]
+  users                users?                 @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  payment_transactions payment_transactions[]
 }
 
 model product_concerns {
@@ -272,3 +290,22 @@ enum Role {
   ADMIN
   USER
 }
+
+model payment_transactions {
+  id             Int      @id @default(autoincrement())
+  order_id       Int
+  transaction_id String?  @db.VarChar(255)
+  request_id     String?  @db.VarChar(255)
+  provider       String   @db.VarChar(50)
+  amount         Int
+  status         String   @db.VarChar(50)
+  raw_response   Json?
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+  updated_at     DateTime @default(now()) @db.Timestamp(6)
+
+  orders         orders   @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([order_id], map: "idx_payment_transactions_order")
+  @@index([request_id], map: "idx_payment_transactions_request")
+}
+
