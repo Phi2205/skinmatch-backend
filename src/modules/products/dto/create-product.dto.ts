@@ -4,11 +4,24 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 
-export class ProductVariantDto {
-  @ApiProperty({ example: '50ml', description: 'Dung tích/Khối lượng' })
+export class VariantAttributeDto {
+  @ApiProperty({ example: 'volume', description: 'Tên thuộc tính (e.g. volume, color)' })
   @IsString()
   @IsNotEmpty()
-  volume: string;
+  name: string;
+
+  @ApiProperty({ example: '50ml', description: 'Giá trị thuộc tính' })
+  @IsString()
+  @IsNotEmpty()
+  value: string;
+}
+
+export class ProductVariantDto {
+  @ApiProperty({ type: [VariantAttributeDto], description: 'Danh sách thuộc tính của variant' })
+  @IsArray()
+  @IsOptional()
+  @Type(() => VariantAttributeDto)
+  attributes?: VariantAttributeDto[];
 
   @ApiProperty({ example: 250000, description: 'Giá (VND)' })
   @Type(() => Number)

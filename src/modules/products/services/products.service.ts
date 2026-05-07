@@ -115,6 +115,17 @@ export class ProductsService {
   }
 
   async getProductDetail(id: number, onlyActive = true) {
+    const cacheKey = `product:detail:${id}:${onlyActive}`;
+    const cached = await this.redisService.get(cacheKey);
+
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        console.error('Error parsing cached product detail:', e);
+      }
+    }
+
     const product = await this.repository.findProductById(id);
 
     if (!product) return null;
@@ -124,7 +135,7 @@ export class ProductsService {
       ? Math.min(...product.product_variants.map((v) => v.price))
       : 0;
 
-    return {
+    const result = {
       ...product,
       price: minPrice,
       variants: product.product_variants,
@@ -142,7 +153,24 @@ export class ProductsService {
       product_categories: undefined,
       product_variants: undefined,
     };
+
+    // Cache for 30 minutes
+    await this.redisService.set(cacheKey, JSON.stringify(result), 1800);
+
+    return result;
   }
+
+  private async clearProductDetailCache(id: number) {
+    try {
+      await Promise.all([
+        this.redisService.del(`product:detail:${id}:true`),
+        this.redisService.del(`product:detail:${id}:false`),
+      ]);
+    } catch (err) {
+      console.error('Error clearing product detail cache:', err);
+    }
+  }
+
 
   async getProductsByRelation(params: {
     type: 'category' | 'badge' | 'ingredient' | 'concern' | 'skin_type';
@@ -223,18 +251,23 @@ export class ProductsService {
     } else if (dto.name) {
       slug = await this.generateUniqueSlug(dto.name, id);
     }
-    return this.repository.update(id, { ...dto, slug });
+    const updated = await this.repository.update(id, { ...dto, slug });
+    await this.clearProductDetailCache(id);
+    return updated;
   }
 
   async remove(id: number) {
     const product = await this.findOne(id);
     await this.repository.delete(id);
+    await this.clearProductDetailCache(id);
     return product;
   }
 
   async updateStatus(id: number, is_active: boolean) {
     await this.findOne(id);
-    return this.repository.updateStatus(id, is_active);
+    const result = await this.repository.updateStatus(id, is_active);
+    await this.clearProductDetailCache(id);
+    return result;
   }
 
   // ─── Product Images ────────────────────────────────────
@@ -250,6 +283,7 @@ export class ProductsService {
 
     const newImage = await this.repository.addProductImage(productId, imageUrl, altText, isMain, position);
     await this.reorderProductImages(productId);
+    await this.clearProductDetailCache(productId);
     return newImage;
   }
 
@@ -267,6 +301,7 @@ export class ProductsService {
       await this.reorderProductImages(productId);
     }
 
+    await this.clearProductDetailCache(productId);
     return updated;
   }
 
@@ -280,6 +315,7 @@ export class ProductsService {
 
     // Run the global reorder logic to handle main image and sequential indexes
     await this.reorderProductImages(productId);
+    await this.clearProductDetailCache(productId);
 
     return this.repository.findAllProductImages(productId);
   }
@@ -292,6 +328,7 @@ export class ProductsService {
     const productId = image.product_id;
     await this.repository.deleteProductImage(imageId);
     await this.reorderProductImages(productId);
+    await this.clearProductDetailCache(productId);
     return image;
   }
 

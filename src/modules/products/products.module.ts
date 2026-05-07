@@ -10,6 +10,6 @@ import { RedisModule } from '../../redis/redis.module.js';
   imports: [PrismaModule, CloudinaryModule, RedisModule],
   controllers: [ProductsController],
   providers: [ProductsService, ProductsRepository],
-  exports: [ProductsService],
+  exports: [ProductsService, ProductsRepository],
 })
 export class ProductsModule { }
