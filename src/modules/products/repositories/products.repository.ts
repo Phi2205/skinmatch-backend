@@ -34,7 +34,9 @@ export class ProductsRepository {
         product_categories: {
           include: { categories: true },
         },
-        product_variants: true,
+        product_variants: {
+          where: { is_active: true },
+        },
       },
       take: limit,
     });
@@ -160,6 +162,7 @@ export class ProductsRepository {
           },
           product_images: true,
           product_variants: {
+            where: { is_active: true },
             include: { attributes: true }
           },
         },
@@ -221,6 +224,7 @@ export class ProductsRepository {
           include: { concerns: true },
         },
         product_variants: {
+          where: { is_active: true },
           include: { attributes: true }
         },
       },
@@ -263,6 +267,7 @@ export class ProductsRepository {
           image_url: true,
           slug: true,
           product_variants: {
+            where: { is_active: true },
             include: { attributes: true }
           },
         },
@@ -440,7 +445,10 @@ export class ProductsRepository {
       }
 
       if (variants !== undefined) {
-        await tx.product_variants.deleteMany({ where: { product_id: id } });
+        await tx.product_variants.updateMany({
+          where: { product_id: id },
+          data: { is_active: false },
+        });
         if (variants.length) {
           for (const v of variants) {
             await tx.product_variants.create({

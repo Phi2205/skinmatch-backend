@@ -34,6 +34,12 @@ export class IngredientsRepository {
     });
   }
 
+  async findByName(name: string) {
+    return this.prisma.ingredients.findUnique({
+      where: { name },
+    });
+  }
+
   async findManyBySlugs(slugs: string[]) {
     return this.prisma.ingredients.findMany({
       where: { slug: { in: slugs } },
