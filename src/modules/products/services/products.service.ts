@@ -165,6 +165,7 @@ export class ProductsService {
       await Promise.all([
         this.redisService.del(`product:detail:${id}:true`),
         this.redisService.del(`product:detail:${id}:false`),
+        this.redisService.delByPattern('products:relation:*'),
       ]);
     } catch (err) {
       console.error('Error clearing product detail cache:', err);
@@ -240,7 +241,9 @@ export class ProductsService {
 
   async create(dto: CreateProductDto) {
     const slug = await this.generateUniqueSlug(dto.slug || dto.name);
-    return this.repository.create({ ...dto, slug });
+    const result = await this.repository.create({ ...dto, slug });
+    await this.clearProductDetailCache(result.id);
+    return result;
   }
 
   async update(id: number, dto: UpdateProductDto) {

@@ -40,6 +40,11 @@ export class IngredientsService {
   }
 
   async create(dto: CreateIngredientDto) {
+    const existing = await this.repository.findByName(dto.name);
+    if (existing) {
+      throw new ConflictException(`Thành phần với tên "${dto.name}" đã tồn tại.`);
+    }
+
     const slug = await this.generateUniqueSlug(dto.name);
     
     return this.repository.create({
@@ -75,6 +80,13 @@ export class IngredientsService {
 
   async update(id: number, dto: UpdateIngredientDto) {
     await this.findOne(id); // Check existence
+
+    if (dto.name) {
+      const existing = await this.repository.findByName(dto.name);
+      if (existing && existing.id !== id) {
+        throw new ConflictException(`Thành phần với tên "${dto.name}" đã tồn tại.`);
+      }
+    }
 
     let slug: string | undefined;
     if (dto.name) {
