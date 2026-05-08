@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
 @Injectable()
@@ -371,26 +371,27 @@ export class ProductsRepository {
     id: number,
     data: {
       name?: string;
-    category_ids?: number[];
-    description?: string;
-    summary?: string;
-    image_url?: string;
-    is_featured?: boolean;
-    is_active?: boolean;
-    badge_ids?: number[];
-    concern_ids?: number[];
-    ingredient_ids?: number[];
-    skin_type_ids?: number[];
-    ingredient_full_text?: string;
-    usage_instructions?: string;
-    slug?: string;
-    variants?: { 
-      price: number; 
-      sku?: string; 
-      stock?: number;
-      attributes?: { name: string; value: string }[] 
-    }[];
-  }) {
+      category_ids?: number[];
+      description?: string;
+      summary?: string;
+      image_url?: string;
+      is_featured?: boolean;
+      is_active?: boolean;
+      badge_ids?: number[];
+      concern_ids?: number[];
+      ingredient_ids?: number[];
+      skin_type_ids?: number[];
+      ingredient_full_text?: string;
+      usage_instructions?: string;
+      slug?: string;
+      variants?: { 
+        id?: number;
+        price?: number; 
+        sku?: string; 
+        stock?: number;
+        attributes?: { name: string; value: string }[] 
+      }[];
+    }) {
     const {
       badge_ids, concern_ids, ingredient_ids, skin_type_ids, category_ids, variants,
       ...productData
@@ -445,24 +446,78 @@ export class ProductsRepository {
       }
 
       if (variants !== undefined) {
-        await tx.product_variants.updateMany({
-          where: { product_id: id },
-          data: { is_active: false },
+        // 1. Get all currently active variants of this product in the DB
+        const existingVariants = await tx.product_variants.findMany({
+          where: { product_id: id, is_active: true },
+          select: { id: true },
         });
-        if (variants.length) {
-          for (const v of variants) {
-            await tx.product_variants.create({
-              data: {
-                product_id: id,
-                price: v.price,
-                sku: v.sku,
-                stock: v.stock,
-                attributes: v.attributes?.length
-                  ? { create: v.attributes }
-                  : undefined,
-              },
+        const existingIds = existingVariants.map((v) => v.id);
+
+        // 2. Identify incoming items with IDs vs without IDs
+        const incomingWithId = variants.filter((v) => v.id !== undefined && v.id !== null);
+        const incomingWithoutId = variants.filter((v) => v.id === undefined || v.id === null);
+
+        const incomingIds = incomingWithId.map((v) => v.id as number);
+
+        // 3. Any existing active ID that is NOT in the incoming update list should be soft-deleted (is_active: false)
+        const idsToSoftDelete = existingIds.filter((exId) => !incomingIds.includes(exId));
+        if (idsToSoftDelete.length > 0) {
+          await tx.product_variants.updateMany({
+            where: { id: { in: idsToSoftDelete } },
+            data: { is_active: false },
+          });
+        }
+
+        // 4. Update the items that have an ID
+        for (const v of incomingWithId) {
+          const { id: vId, attributes, ...vData } = v;
+          await tx.product_variants.update({
+            where: { id: vId },
+            data: {
+              ...vData,
+              is_active: true, // Ensure it is active if updated
+            },
+          });
+
+          // Update attributes for this variant
+          if (attributes !== undefined) {
+            await tx.variant_attributes.deleteMany({
+              where: { variant_id: vId! },
             });
+            if (attributes.length > 0) {
+              await tx.variant_attributes.createMany({
+                data: attributes.map((attr) => ({
+                  variant_id: vId!,
+                  name: attr.name,
+                  value: attr.value,
+                })),
+              });
+            }
           }
+        }
+
+        // 5. Create new items that don't have an ID
+        for (const v of incomingWithoutId) {
+          const { attributes, price, ...vData } = v;
+          if (price === undefined) {
+            throw new BadRequestException('Mọi variant mới được thêm phải có giá (price)');
+          }
+          await tx.product_variants.create({
+            data: {
+              product_id: id,
+              price,
+              ...vData,
+              is_active: true,
+              attributes: attributes?.length
+                ? {
+                    create: attributes.map((attr) => ({
+                      name: attr.name,
+                      value: attr.value,
+                    })),
+                  }
+                : undefined,
+            },
+          });
         }
       }
 
