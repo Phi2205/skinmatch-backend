@@ -479,6 +479,7 @@ HƯỚNG DẪN TRẢ LỜI (STREAM MODE):
 2. LUẬT RECOMMEND SẢN PHẨM:
    - Khi bạn giới thiệu, nhắc tên, hướng dẫn sử dụng, so sánh hoặc cung cấp thông tin chi tiết về sản phẩm nào trong câu trả lời, bạn PHẢI liệt kê ID của sản phẩm đó vào thẻ tag ở DÒNG CUỐI CÙNG của câu trả lời.
    - Thẻ tag có định dạng chính xác sau: [RECOMMENDED_IDS: id1, id2, ...] (ví dụ: [RECOMMENDED_IDS: 13, 14]).
+   - CẢNH BÁO QUAN TRỌNG: Chỉ điền "ID: ..." thực tế của sản phẩm được ghi trong ngữ cảnh (ví dụ: ID: 15). TUYỆT ĐỐI không điền số thứ tự của danh sách (như 1, 2, 3, 4) hay số thứ tự của sản phẩm trong ngữ cảnh (như SẢN PHẨM 1, SẢN PHẨM 2) vào thẻ tag. Việc điền sai ID sẽ khiến hệ thống không thể hiển thị sản phẩm cho khách hàng.
    - Nếu bạn không giới thiệu hoặc đề xuất sản phẩm nào, hãy để thẻ rỗng: [RECOMMENDED_IDS: ].
    - Chỉ được lấy các ID thực sự xuất hiện trong phần "NGỮ CẢNH SẢN PHẨM KHẢ DỤNG" bên dưới. Tuyệt đối không tự bịa đặt ID khác.
 
@@ -501,7 +502,10 @@ ${contextText}
       const messagesForLLM = [
         { role: 'system', content: systemPrompt },
         ...chatHistory.map(msg => ({ role: msg.role, content: msg.content })),
-        { role: 'user', content: message },
+        { 
+          role: 'user', 
+          content: message + '\n\n[LƯU Ý HỆ THỐNG: Bạn BẮT BUỘC phải kết thúc câu trả lời bằng thẻ tag [RECOMMENDED_IDS: id1, id2, ...] (ví dụ: [RECOMMENDED_IDS: 12, 15]) để đề xuất sản phẩm bạn vừa giới thiệu ở trên. Điền chính xác ID từ ngữ cảnh khả dụng. Nếu không đề xuất sản phẩm nào, bắt buộc ghi [RECOMMENDED_IDS: ]. Tuyệt đối không được quên thẻ tag này ở dòng cuối cùng của câu trả lời!]'
+        },
       ];
 
       // 7. Gọi OpenAI chat completion với stream: true
@@ -519,9 +523,10 @@ ${contextText}
         const text = chunk.choices[0]?.delta?.content || '';
         buffer += text;
 
-        // Phát hiện và bóc tách thẻ tag [RECOMMENDED_IDS: ...] ra khỏi phần chữ gửi đi
-        const tagIndex = buffer.indexOf('[RECOMMENDED_IDS:');
-        if (tagIndex !== -1) {
+        // Phát hiện và bóc tách thẻ tag [RECOMMENDED_IDS: ...] ra khỏi phần chữ gửi đi (không phân biệt hoa thường)
+        const tagMatch = buffer.match(/\[RECOMMENDED_IDS:/i);
+        if (tagMatch && tagMatch.index !== undefined) {
+          const tagIndex = tagMatch.index;
           const beforeTag = buffer.substring(0, tagIndex);
           if (beforeTag.length > 0) {
             res.write(`data: ${JSON.stringify({ type: 'chunk', content: beforeTag })}\n\n`);
@@ -540,13 +545,14 @@ ${contextText}
       }
 
       // Xử lý buffer còn lại sau khi kết thúc stream
+      console.log('DEBUG [askStream] Final buffer before parsing:', JSON.stringify(buffer));
       let recommendedIdsStr = '';
-      const finalTagMatch = buffer.match(/\[RECOMMENDED_IDS:\s*([^[\]]*)\s*\]/);
+      const finalTagMatch = buffer.match(/\[RECOMMENDED_IDS:\s*([^[\]]*)\s*\]/i);
       if (finalTagMatch) {
         recommendedIdsStr = finalTagMatch[1];
-        buffer = buffer.replace(/\[RECOMMENDED_IDS:\s*([^[\]]*)\s*\]/, '');
+        buffer = buffer.replace(/\[RECOMMENDED_IDS:\s*([^[\]]*)\s*\]/i, '');
       } else {
-        buffer = buffer.replace(/\[RECOMMENDED_IDS[\s\S]*/, '');
+        buffer = buffer.replace(/\[RECOMMENDED_IDS[\s\S]*/i, '');
       }
 
       // Gửi nốt phần chữ còn lại
@@ -560,6 +566,7 @@ ${contextText}
         .split(',')
         .map(id => id.trim())
         .filter(id => id.length > 0);
+      console.log('rawIds', rawIds);
 
       const originalIds = matchedChunks.map(chunk => chunk.product_id);
       const isNumberId = originalIds.length > 0 && typeof originalIds[0] === 'number';
@@ -576,7 +583,9 @@ ${contextText}
 
       // Chỉ giữ lại các ID hợp lệ xuất hiện trong matchedChunks để đảm bảo an toàn dữ liệu
       const matchedProductIds = [...new Set(matchedChunks.map(chunk => chunk.product_id))];
-      const validProductIds = finalProductIds.filter(id => matchedProductIds.includes(id));
+      console.log('matchedProductIds', matchedProductIds);
+      console.log('finalProductIds', finalProductIds);
+      const validProductIds = [...new Set(finalProductIds.filter(id => matchedProductIds.includes(id)))];
 
       let recommendedProducts: any[] = [];
       if (validProductIds.length > 0) {

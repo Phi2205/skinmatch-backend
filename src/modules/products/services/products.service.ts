@@ -8,12 +8,14 @@ import { ProductFilterDto } from '../dto/product-filter.dto.js';
 import { slugify } from '../../../common/helpers/slug.helper.js';
 
 import { RedisService } from '../../../redis/redis.service.js';
+import { ChatbotIngestionService } from '../../chatbot/services/chatbot-ingestion.service.js';
 
 @Injectable()
 export class ProductsService {
   constructor(
     private repository: ProductsRepository,
     private redisService: RedisService,
+    private chatbotIngestionService: ChatbotIngestionService,
   ) { }
 
   async generateUniqueSlug(name: string, idToIgnore?: number): Promise<string> {
@@ -160,12 +162,92 @@ export class ProductsService {
     return result;
   }
 
+  async getSimilarProducts(productId: number, limit = 4) {
+    const cacheKey = `product:similar:${productId}:${limit}`;
+    const cached = await this.redisService.get(cacheKey);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        console.error('Error parsing cached similar products:', e);
+      }
+    }
+
+    // Ensure product exists
+    const product = await this.repository.findProductById(productId);
+    if (!product) {
+      return [];
+    }
+
+    // 1. Try finding vector-based similarity
+    let similarCandidates = await this.repository.findSimilarProductsByVector(productId, limit);
+    let similarIds = similarCandidates.map((c) => Number(c.product_id || c.id));
+
+    // 2. Fallback 1: Same categories if vector similarity returned nothing
+    if (similarIds.length === 0) {
+      const categoryIds = product.product_categories.map((pc) => pc.category_id);
+      if (categoryIds.length > 0) {
+        const fallbackCategory = await this.repository.findProductsByCategoryFallback(productId, categoryIds, limit);
+        similarIds = fallbackCategory.map((p) => p.id);
+      }
+    }
+
+    // 3. Fallback 2: General active products if still nothing
+    if (similarIds.length === 0) {
+      const fallbackGeneral = await this.repository.findProductsGeneralFallback(productId, limit);
+      similarIds = fallbackGeneral.map((p) => p.id);
+    }
+
+    if (similarIds.length === 0) {
+      return [];
+    }
+
+    // 4. Get full product details for final recommended IDs
+    const productsFromDb = await this.repository.findProductsForRecommendation(similarIds);
+
+    // Format and maintain rank order
+    const formattedProducts = similarIds
+      .map((id) => {
+        const p = productsFromDb.find((item) => item.id === id);
+        if (!p) return null;
+        const minPrice = p.product_variants?.length
+          ? Math.min(...p.product_variants.map((v) => v.price))
+          : 0;
+
+        return {
+          ...p,
+          price: minPrice,
+          variants: p.product_variants,
+          images: p.product_images.sort((a, b) => a.position - b.position),
+          badges: p.product_badges.map((pb) => pb.badges),
+          categories: p.product_categories.map((pc) => pc.categories),
+          concerns: p.product_concerns.map((pc) => pc.concerns),
+          ingredients: p.product_ingredients.map((pi) => pi.ingredients),
+          skin_types: p.product_skin_types.map((ps) => ps.skin_types),
+          product_images: undefined,
+          product_badges: undefined,
+          product_categories: undefined,
+          product_variants: undefined,
+          product_concerns: undefined,
+          product_ingredients: undefined,
+          product_skin_types: undefined,
+        };
+      })
+      .filter((p) => p !== null);
+
+    // Cache results for 1 hour (3600 seconds)
+    await this.redisService.set(cacheKey, JSON.stringify(formattedProducts), 3600);
+
+    return formattedProducts;
+  }
+
   private async clearProductDetailCache(id: number) {
     try {
       await Promise.all([
         this.redisService.del(`product:detail:${id}:true`),
         this.redisService.del(`product:detail:${id}:false`),
         this.redisService.delByPattern('products:relation:*'),
+        this.redisService.delByPattern(`product:similar:${id}:*`),
       ]);
     } catch (err) {
       console.error('Error clearing product detail cache:', err);
@@ -243,6 +325,12 @@ export class ProductsService {
     const slug = await this.generateUniqueSlug(dto.slug || dto.name);
     const result = await this.repository.create({ ...dto, slug });
     await this.clearProductDetailCache(result.id);
+
+    // Ingest into vector database in the background to avoid blocking the API
+    this.chatbotIngestionService.ingestSingleProduct(result.id).catch((err) => {
+      console.error(`Failed to ingest product ${result.id} to vector DB:`, err);
+    });
+
     return result;
   }
 
@@ -256,6 +344,12 @@ export class ProductsService {
     }
     const updated = await this.repository.update(id, { ...dto, slug });
     await this.clearProductDetailCache(id);
+
+    // Re-ingest into vector database in the background to avoid blocking the API
+    this.chatbotIngestionService.ingestSingleProduct(id).catch((err) => {
+      console.error(`Failed to re-ingest product ${id} to vector DB:`, err);
+    });
+
     return updated;
   }
 
@@ -270,6 +364,12 @@ export class ProductsService {
     await this.findOne(id);
     const result = await this.repository.updateStatus(id, is_active);
     await this.clearProductDetailCache(id);
+
+    // Update ingestion in the background (will clear vectors if is_active is false)
+    this.chatbotIngestionService.ingestSingleProduct(id).catch((err) => {
+      console.error(`Failed to update status ingestion for product ${id}:`, err);
+    });
+
     return result;
   }
 

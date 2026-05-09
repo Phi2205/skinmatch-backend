@@ -203,6 +203,80 @@ export class ProductsRepository {
     });
   }
 
+  async findSimilarProductsByVector(productId: number, limit = 4): Promise<any[]> {
+    return this.prisma.$queryRawUnsafe<any[]>(`
+      SELECT 
+        p.id, 
+        p.name, 
+        p.slug, 
+        p.image_url, 
+        p.summary,
+        MIN(pe2.embedding <=> pe1.embedding) as distance
+      FROM "product_embeddings" pe1
+      INNER JOIN "product_embeddings" pe2 ON pe2.product_id <> pe1.product_id
+      INNER JOIN "products" p ON pe2.product_id = p.id
+      WHERE pe1.product_id = $1 AND p.is_active = true AND pe1.embedding IS NOT NULL AND pe2.embedding IS NOT NULL
+      GROUP BY p.id, p.name, p.slug, p.image_url, p.summary
+      ORDER BY distance ASC
+      LIMIT $2
+    `, productId, limit);
+  }
+
+  async findProductsByCategoryFallback(productId: number, categoryIds: number[], limit = 4) {
+    return this.prisma.products.findMany({
+      where: {
+        id: { not: productId },
+        is_active: true,
+        product_categories: {
+          some: {
+            category_id: { in: categoryIds },
+          },
+        },
+      },
+      select: { id: true },
+      take: limit,
+    });
+  }
+
+  async findProductsGeneralFallback(productId: number, limit = 4) {
+    return this.prisma.products.findMany({
+      where: {
+        id: { not: productId },
+        is_active: true,
+      },
+      select: { id: true },
+      take: limit,
+    });
+  }
+
+  async findProductsForRecommendation(ids: number[]) {
+    return this.prisma.products.findMany({
+      where: { id: { in: ids } },
+      include: {
+        product_categories: {
+          include: { categories: true },
+        },
+        product_images: true,
+        product_badges: {
+          include: { badges: true },
+        },
+        product_ingredients: {
+          include: { ingredients: true },
+        },
+        product_skin_types: {
+          include: { skin_types: true },
+        },
+        product_concerns: {
+          include: { concerns: true },
+        },
+        product_variants: {
+          where: { is_active: true },
+          include: { attributes: true }
+        },
+      },
+    });
+  }
+
   async findBySlug(slug: string) {
     return this.prisma.products.findUnique({
       where: { slug },
@@ -310,11 +384,11 @@ export class ProductsRepository {
     ingredient_full_text?: string;
     usage_instructions?: string;
     slug: string;
-    variants?: { 
-      price: number; 
-      sku?: string; 
+    variants?: {
+      price: number;
+      sku?: string;
       stock?: number;
-      attributes?: { name: string; value: string }[] 
+      attributes?: { name: string; value: string }[]
     }[];
   }) {
     const {
@@ -384,12 +458,12 @@ export class ProductsRepository {
       ingredient_full_text?: string;
       usage_instructions?: string;
       slug?: string;
-      variants?: { 
+      variants?: {
         id?: number;
-        price?: number; 
-        sku?: string; 
+        price?: number;
+        sku?: string;
         stock?: number;
-        attributes?: { name: string; value: string }[] 
+        attributes?: { name: string; value: string }[]
       }[];
     }) {
     const {
@@ -510,11 +584,11 @@ export class ProductsRepository {
               is_active: true,
               attributes: attributes?.length
                 ? {
-                    create: attributes.map((attr) => ({
-                      name: attr.name,
-                      value: attr.value,
-                    })),
-                  }
+                  create: attributes.map((attr) => ({
+                    name: attr.name,
+                    value: attr.value,
+                  })),
+                }
                 : undefined,
             },
           });
