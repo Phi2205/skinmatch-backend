@@ -17,6 +17,7 @@ import { CacheModule } from './modules/cache/cache.module.js';
 import { CartsModule } from './modules/carts/carts.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
+import { ChatbotModule } from './modules/chatbot/chatbot.module.js';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { OrdersModule } from './modules/orders/orders.module.js';
     CartsModule,
     PaymentsModule,
     OrdersModule,
+    ChatbotModule,
   ],
 
   providers: [],

@@ -95,6 +95,21 @@ export class ProductsController {
     };
   }
 
+  @Get(':id/similar')
+  @ApiOperation({ summary: 'Get similar products based on vector similarity and category fallbacks' })
+  async findSimilar(
+    @Param('id') id: string,
+    @Query('limit') limit?: string,
+  ) {
+    const limitNum = limit ? Number(limit) : 4;
+    const data = await this.productsService.getSimilarProducts(Number(id), limitNum);
+    return {
+      success: true,
+      message: 'Similar products fetched successfully',
+      data,
+    };
+  }
+
   @Get('slug/:slug')
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get product detail by slug' })

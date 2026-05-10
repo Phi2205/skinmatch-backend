@@ -143,6 +143,7 @@ model products {
   product_variants     product_variants[]
   user_behaviors       user_behaviors[]
   cart_items           cart_items[]
+  product_embeddings   product_embeddings[]
 }
 
 model product_variants {
@@ -308,5 +309,18 @@ model payment_transactions {
 
   @@index([order_id], map: "idx_payment_transactions_order")
   @@index([request_id], map: "idx_payment_transactions_request")
+}
+
+model product_embeddings {
+  id           Int                          @id @default(autoincrement())
+  product_id   Int
+  chunk_type   String?                      @db.VarChar(50)
+  chunk_index  Int                          @default(0)
+  chunk_text   String                       @db.Text
+  metadata     Json
+  embedding    Unsupported("vector(1536)")?
+  products     products                     @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([product_id], map: "idx_product_embeddings_product")
 }
 
