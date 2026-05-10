@@ -64,10 +64,33 @@ export class OrdersRepository {
     });
   }
 
-  async findByUserId(userId: number) {
-    return this.prisma.orders.findMany({
-      where: { users: { id: userId } },
+  async findByUserId(userId: number, page?: number, limit?: number) {
+    const where = { users: { id: userId } };
 
+    if (page !== undefined && limit !== undefined) {
+      const skip = (page - 1) * limit;
+      const [items, totalItems] = await Promise.all([
+        this.prisma.orders.findMany({
+          where,
+          include: {
+            order_items: {
+              include: {
+                products: true,
+                variants: true,
+              },
+            },
+          },
+          orderBy: { created_at: 'desc' },
+          skip,
+          take: limit,
+        }),
+        this.prisma.orders.count({ where }),
+      ]);
+      return { items, totalItems };
+    }
+
+    const items = await this.prisma.orders.findMany({
+      where,
       include: {
         order_items: {
           include: {
@@ -78,6 +101,7 @@ export class OrdersRepository {
       },
       orderBy: { created_at: 'desc' },
     });
+    return { items, totalItems: items.length };
   }
 
   async findById(id: number) {

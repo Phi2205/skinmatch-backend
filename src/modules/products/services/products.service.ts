@@ -50,6 +50,8 @@ export class ProductsService {
       return {
         ...product,
         price: minPrice,
+        rating: product.review_count > 0 ? Math.round((product.rating_sum / product.review_count) * 10) / 10 : 0,
+        reviews_count: product.review_count,
         variants: product.product_variants,
         badges: product.product_badges.map((pb) => pb.badges),
         concerns: product.product_concerns.map((pc) => pc.concerns),
@@ -104,6 +106,8 @@ export class ProductsService {
       return {
         ...product,
         price: minPrice,
+        rating: product.review_count > 0 ? Math.round((product.rating_sum / product.review_count) * 10) / 10 : 0,
+        reviewsCount: product.review_count,
         variants: product.product_variants,
         images: product.product_images.sort((a, b) => a.position - b.position),
         categories: product.product_categories.map((pc) => pc.categories),
@@ -140,6 +144,8 @@ export class ProductsService {
     const result = {
       ...product,
       price: minPrice,
+      rating: product.review_count > 0 ? Math.round((product.rating_sum / product.review_count) * 10) / 10 : 0,
+      reviewsCount: product.review_count,
       variants: product.product_variants,
       images: product.product_images.sort((a, b) => a.position - b.position),
       badges: product.product_badges.map((pb) => pb.badges),
@@ -217,6 +223,8 @@ export class ProductsService {
         return {
           ...p,
           price: minPrice,
+          rating: p.review_count > 0 ? Math.round((p.rating_sum / p.review_count) * 10) / 10 : 0,
+          reviewsCount: p.review_count,
           variants: p.product_variants,
           images: p.product_images.sort((a, b) => a.position - b.position),
           badges: p.product_badges.map((pb) => pb.badges),
@@ -294,6 +302,8 @@ export class ProductsService {
     return {
       ...product,
       price: minPrice,
+      rating: product.review_count > 0 ? Math.round((product.rating_sum / product.review_count) * 10) / 10 : 0,
+      reviewsCount: product.review_count,
       variants: product.product_variants,
       images: product.product_images.sort((a, b) => a.position - b.position),
       badges: product.product_badges.map((pb) => pb.badges),

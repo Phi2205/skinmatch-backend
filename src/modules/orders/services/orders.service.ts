@@ -163,8 +163,8 @@ export class OrdersService {
   }
 
 
-  async getUserOrders(userId: number) {
-    return this.ordersRepository.findByUserId(userId);
+  async getUserOrders(userId: number, page?: number, limit?: number) {
+    return this.ordersRepository.findByUserId(userId, page, limit);
   }
 
   async getOrderById(orderId: number) {

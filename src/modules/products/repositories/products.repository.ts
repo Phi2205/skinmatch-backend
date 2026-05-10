@@ -340,6 +340,8 @@ export class ProductsRepository {
           summary: true,
           image_url: true,
           slug: true,
+          rating_sum: true,
+          review_count: true,
           product_variants: {
             where: { is_active: true },
             include: { attributes: true }
@@ -359,6 +361,8 @@ export class ProductsRepository {
       return {
         ...product,
         price: minPrice,
+        rating: product.review_count > 0 ? Math.round((product.rating_sum / product.review_count) * 10) / 10 : 0,
+        reviewsCount: product.review_count,
         variants: product.product_variants,
         product_variants: undefined,
       };
