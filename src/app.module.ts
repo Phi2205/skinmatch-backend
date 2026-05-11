@@ -19,6 +19,7 @@ import { PaymentsModule } from './modules/payments/payments.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
 import { ChatbotModule } from './modules/chatbot/chatbot.module.js';
 import { UserModule } from './modules/user/user.module.js';
+import { FlashSalesModule } from './modules/flash-sales/flash-sales.module.js';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { UserModule } from './modules/user/user.module.js';
     OrdersModule,
     ChatbotModule,
     UserModule,
+    FlashSalesModule,
   ],
 
   providers: [],

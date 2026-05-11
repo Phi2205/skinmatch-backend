@@ -98,19 +98,69 @@ export class ProductsService {
       badge_ids: parseIds(query.badge_ids),
     });
 
+    // 1. Lấy tất cả active flash sales cho các sản phẩm hiện tại trong 1 query duy nhất (bulk query)
+    const productIds = items.map((p) => p.id);
+    console.log(productIds);
+    const now = new Date();
+    console.log(now);
+    const allFlashSales = productIds.length > 0
+      ? await this.repository.findActiveFlashSalesByProductIds(productIds, now)
+      : [];
+    // 2. Gom nhóm các flash sale theo product_id vào Map để truy xuất nhanh O(1)
+    const flashSaleMap = new Map<number, any[]>();
+    for (const sale of allFlashSales) {
+      if (!flashSaleMap.has(sale.product_id)) {
+        flashSaleMap.set(sale.product_id, []);
+      }
+      flashSaleMap.get(sale.product_id)!.push(sale);
+    }
+
+    // 3. Thực hiện map dữ liệu in-memory
     const formattedItems = items.map((product) => {
       const minPrice = product.product_variants?.length
         ? Math.min(...product.product_variants.map((v) => v.price))
         : 0;
+
+      const productSales = flashSaleMap.get(product.id) || [];
+
+      // Chèn thông tin flash sale vào từng variant tương ứng
+      const variantsWithFlashSale = product.product_variants?.map((variant) => {
+        const matchingSale = productSales.find(
+          (sale) => sale.variant_id === variant.id || sale.variant_id === null
+        );
+
+        return {
+          ...variant,
+          flash_sale: matchingSale ? {
+            item_id: matchingSale.id,
+            campaign_id: matchingSale.campaign_id,
+            sale_price: matchingSale.sale_price,
+            campaign_title: matchingSale.flash_sales?.title,
+            start_at: matchingSale.flash_sales?.start_at,
+            end_at: matchingSale.flash_sales?.end_at,
+          } : null,
+        };
+      }) || [];
+
+      // Tìm xem có flash sale chung cho toàn bộ product (variant_id === null) không
+      const productFlashSale = productSales.find((sale) => sale.variant_id === null) || productSales[0] || null;
 
       return {
         ...product,
         price: minPrice,
         rating: product.review_count > 0 ? Math.round((product.rating_sum / product.review_count) * 10) / 10 : 0,
         reviewsCount: product.review_count,
-        variants: product.product_variants,
+        variants: variantsWithFlashSale,
         images: product.product_images.sort((a, b) => a.position - b.position),
         categories: product.product_categories.map((pc) => pc.categories),
+        flash_sale: productFlashSale ? {
+          item_id: productFlashSale.id,
+          campaign_id: productFlashSale.campaign_id,
+          sale_price: productFlashSale.sale_price,
+          campaign_title: productFlashSale.flash_sales?.title,
+          start_at: productFlashSale.flash_sales?.start_at,
+          end_at: productFlashSale.flash_sales?.end_at,
+        } : null,
         product_images: undefined,
         product_categories: undefined,
         product_variants: undefined,
@@ -124,49 +174,129 @@ export class ProductsService {
     const cacheKey = `product:detail:${id}:${onlyActive}`;
     const cached = await this.redisService.get(cacheKey);
 
+    let product: any = null;
+
     if (cached) {
       try {
-        return JSON.parse(cached);
+        product = JSON.parse(cached);
       } catch (e) {
         console.error('Error parsing cached product detail:', e);
       }
     }
+    console.log("đã tới đây")
 
-    const product = await this.repository.findProductById(id);
+    if (!product) {
+      const dbProduct = await this.repository.findProductById(id);
+
+      if (!dbProduct) return null;
+      if (onlyActive && !dbProduct.is_active) return null;
+
+      const minPrice = dbProduct.product_variants?.length
+        ? Math.min(...dbProduct.product_variants.map((v) => v.price))
+        : 0;
+
+      product = {
+        ...dbProduct,
+        price: minPrice,
+        rating: dbProduct.review_count > 0 ? Math.round((dbProduct.rating_sum / dbProduct.review_count) * 10) / 10 : 0,
+        reviewsCount: dbProduct.review_count,
+        variants: dbProduct.product_variants,
+        images: dbProduct.product_images.sort((a, b) => a.position - b.position),
+        badges: dbProduct.product_badges.map((pb) => pb.badges),
+        concerns: dbProduct.product_concerns.map((pc) => pc.concerns),
+        ingredients: dbProduct.product_ingredients.map((pi) => pi.ingredients),
+        skin_types: dbProduct.product_skin_types.map((ps) => ps.skin_types),
+        categories: dbProduct.product_categories.map((pc) => pc.categories),
+        product_images: undefined,
+        product_badges: undefined,
+        product_concerns: undefined,
+        product_ingredients: undefined,
+        product_skin_types: undefined,
+        product_categories: undefined,
+        product_variants: undefined,
+      };
+
+      // Cache product chính trong 30 phút (Không chứa flash sale)
+      await this.redisService.set(cacheKey, JSON.stringify(product), 1800);
+    }
 
     if (!product) return null;
-    if (onlyActive && !product.is_active) return null;
+    console.log("đã tới đây")
 
-    const minPrice = product.product_variants?.length
-      ? Math.min(...product.product_variants.map((v) => v.price))
-      : 0;
+    // 1. LUÔN LUÔN lấy thông tin Flash Sale riêng biệt (có cache riêng động tới khi kết thúc)
+    const flashSales = await this.getProductActiveFlashSales(id);
+    console.log("flashsales",flashSales)
 
-    const result = {
+    // 2. Chèn thông tin flash sale vào từng variant tương ứng
+    const variantsWithFlashSale = product.variants?.map((variant: any) => {
+      const matchingSale = flashSales.find(
+        (sale: any) => sale.variant_id === variant.id || sale.variant_id === null
+      );
+
+      return {
+        ...variant,
+        flash_sale: matchingSale ? {
+          item_id: matchingSale.id,
+          campaign_id: matchingSale.campaign_id,
+          sale_price: matchingSale.sale_price,
+          campaign_title: matchingSale.flash_sales?.title,
+          start_at: matchingSale.flash_sales?.start_at,
+          end_at: matchingSale.flash_sales?.end_at,
+        } : null,
+      };
+    }) || [];
+
+    // Tìm xem có flash sale chung cho toàn bộ product (variant_id === null) không
+    const productFlashSale = flashSales.find((sale: any) => sale.variant_id === null) || flashSales[0] || null;
+
+    return {
       ...product,
-      price: minPrice,
-      rating: product.review_count > 0 ? Math.round((product.rating_sum / product.review_count) * 10) / 10 : 0,
-      reviewsCount: product.review_count,
-      variants: product.product_variants,
-      images: product.product_images.sort((a, b) => a.position - b.position),
-      badges: product.product_badges.map((pb) => pb.badges),
-      concerns: product.product_concerns.map((pc) => pc.concerns),
-      ingredients: product.product_ingredients.map((pi) => pi.ingredients),
-      skin_types: product.product_skin_types.map((ps) => ps.skin_types),
-      categories: product.product_categories.map((pc) => pc.categories),
-      product_images: undefined,
-      product_badges: undefined,
-      product_concerns: undefined,
-      product_ingredients: undefined,
-      product_skin_types: undefined,
-      product_categories: undefined,
-      product_variants: undefined,
+      variants: variantsWithFlashSale,
+      flash_sale: productFlashSale ? {
+        item_id: productFlashSale.id,
+        campaign_id: productFlashSale.campaign_id,
+        sale_price: productFlashSale.sale_price,
+        campaign_title: productFlashSale.flash_sales?.title,
+        start_at: productFlashSale.flash_sales?.start_at,
+        end_at: productFlashSale.flash_sales?.end_at,
+      } : null,
     };
-
-    // Cache for 30 minutes
-    await this.redisService.set(cacheKey, JSON.stringify(result), 1800);
-
-    return result;
   }
+
+  async getProductActiveFlashSales(productId: number) {
+    const flashSaleCacheKey = `product:flash-sales-list:${productId}`;
+    const cachedFlashSales = await this.redisService.get(flashSaleCacheKey);
+
+    if (cachedFlashSales) {
+      try {
+        return JSON.parse(cachedFlashSales);
+      } catch (e) {
+        console.error('Error parsing cached product active flash sales:', e);
+      }
+    }
+
+    const now = new Date();
+    const flashSaleItems = await this.repository.findActiveFlashSalesByProductId(productId, now);
+
+    let ttl = 60; // Mặc định nếu không có flash sale nào, cache trong 1 phút để tránh overload DB
+    if (flashSaleItems.length > 0) {
+      // Tính toán TTL dựa trên thời gian kết thúc sớm nhất của chiến dịch đang diễn ra
+      const endTimes = flashSaleItems.map((item: any) => new Date(item.flash_sales.end_at).getTime());
+      const minEndTime = Math.min(...endTimes);
+      const secondsUntilEnd = Math.ceil((minEndTime - now.getTime()) / 1000);
+
+      if (secondsUntilEnd > 0) {
+        ttl = secondsUntilEnd; // Lưu cache cho tới khi flash sale kết thúc
+      }
+    }
+
+    // Cache thông tin danh sách flash sale với TTL động đến khi kết thúc chiến dịch
+    await this.redisService.set(flashSaleCacheKey, JSON.stringify(flashSaleItems), ttl);
+
+    return flashSaleItems;
+  }
+
+
 
   async getSimilarProducts(productId: number, limit = 4) {
     const cacheKey = `product:similar:${productId}:${limit}`;
@@ -273,53 +403,171 @@ export class ProductsService {
     const cacheKey = `products:relation:${params.type}:${params.slug}:p${params.page ?? 1}:l${params.limit ?? 10}`;
     const cached = await this.redisService.get(cacheKey);
 
+    let result: any = null;
+
     if (cached) {
       try {
-        return JSON.parse(cached);
+        result = JSON.parse(cached);
       } catch (e) {
         console.error('Error parsing cached products:', e);
       }
     }
 
-    const result = await this.repository.findProductsByRelationSlug(params);
+    if (!result) {
+      result = await this.repository.findProductsByRelationSlug(params);
 
-    // Cache for 1 hour (3600 seconds)
-    await this.redisService.set(cacheKey, JSON.stringify(result), 3600);
+      // Cache for 1 hour (3600 seconds)
+      await this.redisService.set(cacheKey, JSON.stringify(result), 3600);
+    }
 
-    return result;
+    if (!result || !result.items) return result;
+
+    // 1. Lấy danh sách tất cả Product ID có trên trang hiện tại
+    const productIds = result.items.map((p: any) => p.id);
+
+    // 2. Truy vấn gộp (Bulk Fetch) tất cả các active flash sale của danh sách ID này bằng 1 query duy nhất
+    const now = new Date();
+    const allFlashSales = await this.repository.findActiveFlashSalesByProductIds(productIds, now);
+
+    // 3. Thực hiện map dữ liệu hoàn toàn in-memory, loại bỏ hoàn toàn N+1 query
+    const enrichedItems = result.items.map((product: any) => {
+      // Lọc các Flash Sale thuộc về sản phẩm hiện tại
+      const productSales = allFlashSales.filter((sale: any) => sale.product_id === product.id);
+
+      // Chèn thông tin flash sale vào từng variant tương ứng
+      const variantsWithFlashSale = product.variants?.map((variant: any) => {
+        const matchingSale = productSales.find(
+          (sale: any) => sale.variant_id === variant.id || sale.variant_id === null
+        );
+
+        return {
+          ...variant,
+          flash_sale: matchingSale ? {
+            item_id: matchingSale.id,
+            campaign_id: matchingSale.campaign_id,
+            sale_price: matchingSale.sale_price,
+            campaign_title: matchingSale.flash_sales?.title,
+            start_at: matchingSale.flash_sales?.start_at,
+            end_at: matchingSale.flash_sales?.end_at,
+          } : null,
+        };
+      }) || [];
+
+      // Tìm xem có flash sale chung cho toàn bộ product (variant_id === null) không
+      const productFlashSale = productSales.find((sale: any) => sale.variant_id === null) || productSales[0] || null;
+
+      return {
+        ...product,
+        variants: variantsWithFlashSale,
+        flash_sale: productFlashSale ? {
+          item_id: productFlashSale.id,
+          campaign_id: productFlashSale.campaign_id,
+          sale_price: productFlashSale.sale_price,
+          campaign_title: productFlashSale.flash_sales?.title,
+          start_at: productFlashSale.flash_sales?.start_at,
+          end_at: productFlashSale.flash_sales?.end_at,
+        } : null,
+      };
+    });
+
+    return {
+      ...result,
+      items: enrichedItems,
+    };
   }
 
+
+
   async getProductBySlug(slug: string, onlyActive = true) {
-    const product = await this.repository.findBySlug(slug);
+    const cacheKey = `product:slug:${slug}:${onlyActive}`;
+    const cached = await this.redisService.get(cacheKey);
+
+    let product: any = null;
+
+    if (cached) {
+      try {
+        product = JSON.parse(cached);
+      } catch (e) {
+        console.error('Error parsing cached product by slug:', e);
+      }
+    }
+
+    if (!product) {
+      const dbProduct = await this.repository.findBySlug(slug);
+
+      if (!dbProduct) return null;
+      if (onlyActive && !dbProduct.is_active) return null;
+
+      const minPrice = dbProduct.product_variants?.length
+        ? Math.min(...dbProduct.product_variants.map((v) => v.price))
+        : 0;
+
+      product = {
+        ...dbProduct,
+        price: minPrice,
+        rating: dbProduct.review_count > 0 ? Math.round((dbProduct.rating_sum / dbProduct.review_count) * 10) / 10 : 0,
+        reviewsCount: dbProduct.review_count,
+        variants: dbProduct.product_variants,
+        images: dbProduct.product_images.sort((a, b) => a.position - b.position),
+        badges: dbProduct.product_badges.map((pb) => pb.badges),
+        concerns: dbProduct.product_concerns.map((pc) => pc.concerns),
+        ingredients: dbProduct.product_ingredients.map((pi) => pi.ingredients),
+        skin_types: dbProduct.product_skin_types.map((ps) => ps.skin_types),
+        categories: dbProduct.product_categories.map((pc) => pc.categories),
+        product_images: undefined,
+        product_badges: undefined,
+        product_concerns: undefined,
+        product_ingredients: undefined,
+        product_skin_types: undefined,
+        product_categories: undefined,
+        product_variants: undefined,
+      };
+
+      // Cache product chính trong 30 phút (Không chứa flash sale)
+      await this.redisService.set(cacheKey, JSON.stringify(product), 1800);
+    }
 
     if (!product) return null;
-    if (onlyActive && !product.is_active) return null;
 
-    const minPrice = product.product_variants?.length
-      ? Math.min(...product.product_variants.map((v) => v.price))
-      : 0;
+    // 1. LUÔN LUÔN lấy thông tin Flash Sale riêng biệt (có cache riêng động tới khi kết thúc)
+    const flashSales = await this.getProductActiveFlashSales(product.id);
+
+    // 2. Chèn thông tin flash sale vào từng variant tương ứng
+    const variantsWithFlashSale = product.variants?.map((variant: any) => {
+      const matchingSale = flashSales.find(
+        (sale: any) => sale.variant_id === variant.id || sale.variant_id === null
+      );
+
+      return {
+        ...variant,
+        flash_sale: matchingSale ? {
+          item_id: matchingSale.id,
+          campaign_id: matchingSale.campaign_id,
+          sale_price: matchingSale.sale_price,
+          campaign_title: matchingSale.flash_sales?.title,
+          start_at: matchingSale.flash_sales?.start_at,
+          end_at: matchingSale.flash_sales?.end_at,
+        } : null,
+      };
+    }) || [];
+
+    // Tìm xem có flash sale chung cho toàn bộ product (variant_id === null) không
+    const productFlashSale = flashSales.find((sale: any) => sale.variant_id === null) || flashSales[0] || null;
 
     return {
       ...product,
-      price: minPrice,
-      rating: product.review_count > 0 ? Math.round((product.rating_sum / product.review_count) * 10) / 10 : 0,
-      reviewsCount: product.review_count,
-      variants: product.product_variants,
-      images: product.product_images.sort((a, b) => a.position - b.position),
-      badges: product.product_badges.map((pb) => pb.badges),
-      concerns: product.product_concerns.map((pc) => pc.concerns),
-      ingredients: product.product_ingredients.map((pi) => pi.ingredients),
-      skin_types: product.product_skin_types.map((ps) => ps.skin_types),
-      categories: product.product_categories.map((pc) => pc.categories),
-      product_images: undefined,
-      product_badges: undefined,
-      product_concerns: undefined,
-      product_ingredients: undefined,
-      product_skin_types: undefined,
-      product_categories: undefined,
-      product_variants: undefined,
+      variants: variantsWithFlashSale,
+      flash_sale: productFlashSale ? {
+        item_id: productFlashSale.id,
+        campaign_id: productFlashSale.campaign_id,
+        sale_price: productFlashSale.sale_price,
+        campaign_title: productFlashSale.flash_sales?.title,
+        start_at: productFlashSale.flash_sales?.start_at,
+        end_at: productFlashSale.flash_sales?.end_at,
+      } : null,
     };
   }
+
 
   // ─── Admin CRUD ────────────────────────────────────────
 
