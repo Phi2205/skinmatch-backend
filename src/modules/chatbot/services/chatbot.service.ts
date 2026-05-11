@@ -164,6 +164,14 @@ export class ChatbotService {
   }
 
   /**
+   * Xóa lịch sử trò chuyện trong Redis Cache
+   */
+  async deleteChatHistory(sessionId: string): Promise<void> {
+    const key = `chatbot:session:${sessionId}`;
+    await this.redis.del(key);
+  }
+
+  /**
    * Trả về câu trả lời nhanh cho các tin nhắn chào hỏi, cám ơn hoặc tạm biệt phổ biến.
    * Giúp hệ thống không cần truy vấn Database hay gọi OpenAI, phản hồi tức thì và tiết kiệm chi phí.
    */
