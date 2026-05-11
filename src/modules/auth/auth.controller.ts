@@ -1,11 +1,12 @@
-import { Controller, Post, Body, UnauthorizedException, Res, Req, Get, UseGuards } from '@nestjs/common';
+import { Controller, Post, Put, Body, UnauthorizedException, Res, Req, Get, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { VerifyOtpDto } from './dto/verify-otp.dto.js';
+import { UpdatePasswordDto } from './dto/update-password.dto.js';
 import type { Request, Response } from 'express';
 
 @ApiTags('auth')
@@ -237,6 +238,20 @@ export class AuthController {
     // Redirect to FE with access_token in URL params as requested
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     return res.redirect(`${frontendUrl}/auth/success?accessToken=${result.accessToken}`);
+  }
+
+  @Put('update-password')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Cập nhật/Đổi mật khẩu tài khoản' })
+  @ApiBody({ type: UpdatePasswordDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Đổi mật khẩu thành công',
+  })
+  async updatePassword(@Req() req: any, @Body() dto: UpdatePasswordDto) {
+    const userId = req.user.id;
+    return this.authService.updatePassword(userId, dto);
   }
 }
 

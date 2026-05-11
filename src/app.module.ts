@@ -18,6 +18,8 @@ import { CartsModule } from './modules/carts/carts.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
 import { ChatbotModule } from './modules/chatbot/chatbot.module.js';
+import { UserModule } from './modules/user/user.module.js';
+import { FlashSalesModule } from './modules/flash-sales/flash-sales.module.js';
 
 @Module({
   imports: [
@@ -54,6 +56,8 @@ import { ChatbotModule } from './modules/chatbot/chatbot.module.js';
     PaymentsModule,
     OrdersModule,
     ChatbotModule,
+    UserModule,
+    FlashSalesModule,
   ],
 
   providers: [],

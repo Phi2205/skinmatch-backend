@@ -6,6 +6,7 @@ import { RedisService } from '../../redis/redis.service.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { VerifyOtpDto } from './dto/verify-otp.dto.js';
+import { UpdatePasswordDto } from './dto/update-password.dto.js';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -231,6 +232,43 @@ export class AuthService {
         name: user.name,
         role: user.role,
       },
+    };
+  }
+
+  // 🔐 UPDATE PASSWORD
+  async updatePassword(userId: number, dto: UpdatePasswordDto) {
+    const user = await this.prisma.users.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Người dùng không tồn tại');
+    }
+
+    // Nếu tài khoản đã có mật khẩu (đăng ký thường), yêu cầu mật khẩu cũ để xác thực
+    if (user.password_hash) {
+      if (!dto.oldPassword) {
+        throw new BadRequestException('Vui lòng nhập mật khẩu cũ để xác nhận thay đổi');
+      }
+
+      const isMatch = await bcrypt.compare(dto.oldPassword, user.password_hash);
+      if (!isMatch) {
+        throw new BadRequestException('Mật khẩu cũ không chính xác');
+      }
+    }
+
+    // Mã hóa mật khẩu mới và lưu
+    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    await this.prisma.users.update({
+      where: { id: userId },
+      data: {
+        password_hash: passwordHash,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Mật khẩu đã được đổi thành công',
     };
   }
 }

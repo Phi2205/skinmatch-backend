@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Req, ParseIntPipe, HttpStatus, HttpCode } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards, Req, ParseIntPipe, HttpStatus, HttpCode } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { OrdersService } from '../services/orders.service.js';
 import { CreateDirectOrderDto } from '../dto/create-direct-order.dto.js';
 import { CreateOrderDto } from '../dto/create-order.dto.js';
+import { createPaginationMeta } from '../../../common/helpers/pagination.helper.js';
 
 @ApiTags('Orders')
 @ApiBearerAuth()
@@ -40,13 +41,34 @@ export class OrdersController {
 
 
   @Get()
-  @ApiOperation({ summary: 'Get all orders of the current user' })
-  async getUserOrders(@Req() req: any) {
+  @ApiOperation({ summary: 'Get all orders of the current user with optional pagination' })
+  async getUserOrders(
+    @Req() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     const userId = req.user.id;
-    const orders = await this.ordersService.getUserOrders(userId);
+    const pageNum = page ? Number(page) : undefined;
+    const limitNum = limit ? Number(limit) : undefined;
+
+    const result = await this.ordersService.getUserOrders(userId, pageNum, limitNum);
+
+    if (pageNum !== undefined && limitNum !== undefined) {
+      const meta = createPaginationMeta(pageNum, limitNum, result.totalItems);
+      return {
+        success: true,
+        message: 'Orders fetched successfully',
+        data: {
+          items: result.items,
+          meta,
+        },
+      };
+    }
+
     return {
       success: true,
-      data: orders,
+      message: 'Orders fetched successfully',
+      data: result.items,
     };
   }
 
@@ -56,6 +78,7 @@ export class OrdersController {
     const order = await this.ordersService.getOrderById(orderId);
     return {
       success: true,
+      message: 'Order details fetched successfully',
       data: order,
     };
   }

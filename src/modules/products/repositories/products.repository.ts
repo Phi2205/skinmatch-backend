@@ -203,6 +203,52 @@ export class ProductsRepository {
     });
   }
 
+  async findActiveFlashSalesByProductId(productId: number, now: Date) {
+    return this.prisma.flash_sale_items.findMany({
+      where: {
+        product_id: productId,
+        flash_sales: {
+          is_active: true,
+          start_at: { lte: now },
+          end_at: { gte: now },
+        },
+      },
+      include: {
+        flash_sales: {
+          select: {
+            title: true,
+            start_at: true,
+            end_at: true,
+          },
+        },
+      },
+    });
+  }
+
+  async findActiveFlashSalesByProductIds(productIds: number[], now: Date) {
+    return this.prisma.flash_sale_items.findMany({
+      where: {
+        product_id: { in: productIds },
+        flash_sales: {
+          is_active: true,
+          start_at: { lte: now },
+          end_at: { gte: now },
+        },
+      },
+      include: {
+        flash_sales: {
+          select: {
+            title: true,
+            start_at: true,
+            end_at: true,
+          },
+        },
+      },
+    });
+  }
+
+
+
   async findSimilarProductsByVector(productId: number, limit = 4): Promise<any[]> {
     return this.prisma.$queryRawUnsafe<any[]>(`
       SELECT 
@@ -340,6 +386,8 @@ export class ProductsRepository {
           summary: true,
           image_url: true,
           slug: true,
+          rating_sum: true,
+          review_count: true,
           product_variants: {
             where: { is_active: true },
             include: { attributes: true }
@@ -359,6 +407,8 @@ export class ProductsRepository {
       return {
         ...product,
         price: minPrice,
+        rating: product.review_count > 0 ? Math.round((product.rating_sum / product.review_count) * 10) / 10 : 0,
+        reviewsCount: product.review_count,
         variants: product.product_variants,
         product_variants: undefined,
       };

@@ -24,11 +24,25 @@ export class OrdersService {
     return this._paymentsService;
   }
 
+  private async getVariantCheckoutPrice(productId: number, variantId: number | null, originalPrice: number): Promise<number> {
+    const now = new Date();
+    const activeFlashSales = await this.productsRepository.findActiveFlashSalesByProductId(productId, now);
+
+    const matchingSale = activeFlashSales.find(
+      (sale: any) => sale.variant_id === variantId || sale.variant_id === null
+    );
+
+    if (matchingSale) {
+      return matchingSale.sale_price;
+    }
+
+    return originalPrice;
+  }
+
   async createOrderFromCart(userId: number, dto: CreateOrderDto) {
     if (!dto.receiver_phone) {
       throw new BadRequestException('Receiver phone is required');
     }
-
 
     const cartItems = await this.cartsRepository.findByUserId(userId);
     
@@ -36,20 +50,25 @@ export class OrdersService {
       throw new BadRequestException('Cart is empty');
     }
 
-    // Calculate total price
+    // Calculate total price with active flash sale check
     let totalPrice = 0;
-    const items = cartItems.map((cartItem) => {
-      const price = cartItem.variants ? cartItem.variants.price : 0; 
-      const itemTotal = price * cartItem.quantity;
-      totalPrice += itemTotal;
+    const items = await Promise.all(
+      cartItems.map(async (cartItem) => {
+        const originalPrice = cartItem.variants ? cartItem.variants.price : 0;
+        const price = cartItem.variants
+          ? await this.getVariantCheckoutPrice(cartItem.product_id, cartItem.variant_id, originalPrice)
+          : 0;
+        const itemTotal = price * cartItem.quantity;
+        totalPrice += itemTotal;
 
-      return {
-        product_id: cartItem.product_id,
-        variant_id: cartItem.variant_id,
-        quantity: cartItem.quantity,
-        price: price,
-      };
-    });
+        return {
+          product_id: cartItem.product_id,
+          variant_id: cartItem.variant_id,
+          quantity: cartItem.quantity,
+          price: price,
+        };
+      })
+    );
 
     const order = await this.prisma.$transaction(async (tx) => {
       const createdOrder = await this.ordersRepository.createOrder({
@@ -105,19 +124,20 @@ export class OrdersService {
       if (variant.stock < dto.quantity) {
         throw new BadRequestException('Not enough stock available');
       }
-      price = variant.price;
+      price = await this.getVariantCheckoutPrice(dto.product_id, dto.variant_id, variant.price);
     } else {
       if (product.product_variants.length > 0) {
         const defaultVariant = product.product_variants[0];
         if (defaultVariant.stock < dto.quantity) {
           throw new BadRequestException('Not enough stock available');
         }
-        price = defaultVariant.price;
+        price = await this.getVariantCheckoutPrice(dto.product_id, defaultVariant.id, defaultVariant.price);
         dto.variant_id = defaultVariant.id; // Record the fallback variant id
       } else {
         price = 0; 
       }
     }
+
 
     const totalPrice = price * dto.quantity;
 
@@ -154,7 +174,6 @@ export class OrdersService {
       payUrl = vnpayResponse.payUrl;
     }
 
-    console.log(payUrl);
 
     return {
       ...order,
@@ -163,8 +182,8 @@ export class OrdersService {
   }
 
 
-  async getUserOrders(userId: number) {
-    return this.ordersRepository.findByUserId(userId);
+  async getUserOrders(userId: number, page?: number, limit?: number) {
+    return this.ordersRepository.findByUserId(userId, page, limit);
   }
 
   async getOrderById(orderId: number) {
