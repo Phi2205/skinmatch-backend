@@ -237,7 +237,7 @@ export class AuthController {
 
     // Redirect to FE with access_token in URL params as requested
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    return res.redirect(`${frontendUrl}/auth/success?accessToken=${result.accessToken}`);
+    return res.redirect(`${frontendUrl}/success?accessToken=${result.accessToken}`);
   }
 
   @Put('update-password')

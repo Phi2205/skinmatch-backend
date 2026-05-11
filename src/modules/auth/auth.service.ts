@@ -157,6 +157,7 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        avatar_url: user.avatar_url,
       },
     };
   }
@@ -211,13 +212,26 @@ export class AuthService {
       where: { email: req.user.email },
     });
 
+    const googleName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || 'Google User';
+    const googleAvatar = req.user.picture || null;
+
     if (!user) {
       user = await this.prisma.users.create({
         data: {
           email: req.user.email,
-          name: `${req.user.firstName} ${req.user.lastName}`,
+          name: googleName,
+          avatar_url: googleAvatar,
           is_verified: true,
           role: 'USER',
+        },
+      });
+    } else {
+      // Tự động đồng bộ và cập nhật ảnh đại diện hoặc họ tên của tài khoản nếu chưa có
+      user = await this.prisma.users.update({
+        where: { id: user.id },
+        data: {
+          name: user.name || googleName,
+          avatar_url: user.avatar_url || googleAvatar,
         },
       });
     }
@@ -231,6 +245,7 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        avatar_url: user.avatar_url,
       },
     };
   }
