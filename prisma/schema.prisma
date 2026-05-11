@@ -1,21 +1,27 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["fullTextSearch", "extendedIndexes"]
+  engineType      = "library"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model categories {
-  id       Int        @id @default(autoincrement())
-  name     String     @unique @db.VarChar(100)
-  products products[]
+  id                 Int                  @id @default(autoincrement())
+  name               String               @unique @db.VarChar(100)
+  slug               String               @unique @db.VarChar(100)
+  is_active          Boolean              @default(true)
+  product_categories product_categories[]
 }
 
 model concerns {
   id               Int                @id @default(autoincrement())
   name             String             @unique @db.VarChar(100)
+  slug             String             @unique @db.VarChar(100)
   product_concerns product_concerns[]
   user_concerns    user_concerns[]
 }
@@ -23,27 +29,52 @@ model concerns {
 model ingredients {
   id                  Int                   @id @default(autoincrement())
   name                String                @unique @db.VarChar(100)
+  slug                String                @unique @db.VarChar(100)
   product_ingredients product_ingredients[]
 }
 
 model order_items {
-  id         Int       @id @default(autoincrement())
-  order_id   Int?
-  product_id Int?
-  quantity   Int?
-  price      Int?
-  orders     orders?   @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  products   products? @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id          Int               @id @default(autoincrement())
+  order_id    Int?
+  product_id  Int?
+  variant_id  Int?
+  quantity    Int?
+  price       Int?
+  is_reviewed Boolean           @default(false)
+  orders      orders?           @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products    products?         @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variants    product_variants? @relation(fields: [variant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([order_id], map: "idx_order_items_order")
+  @@index([product_id], map: "idx_order_items_product")
+  @@index([variant_id], map: "idx_order_items_variant")
 }
 
 model orders {
-  id          Int           @id @default(autoincrement())
-  user_id     Int?
-  total_price Int?
-  status      String?       @db.VarChar(50)
-  created_at  DateTime?     @default(now()) @db.Timestamp(6)
-  order_items order_items[]
-  users       users?        @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id      Int  @id @default(autoincrement())
+  user_id Int?
+
+  // 💥 THÔNG TIN NGƯỜI NHẬN (snapshot tại thời điểm đặt)
+  receiver_name  String  @db.VarChar(255)
+  receiver_phone String  @db.VarChar(20)
+  receiver_email String? @db.VarChar(255)
+
+  address_line String  @db.VarChar(255)
+  ward         String? @db.VarChar(100)
+  district     String? @db.VarChar(100)
+  city         String? @db.VarChar(100)
+
+  note String? @db.Text
+
+  total_price    Int
+  status         String @db.VarChar(50)
+  payment_method String @default("COD") @db.VarChar(50)
+
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  order_items          order_items[]
+  users                users?                 @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  payment_transactions payment_transactions[]
 }
 
 model product_concerns {
@@ -53,6 +84,8 @@ model product_concerns {
   products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([product_id, concern_id])
+  @@index([product_id], map: "idx_product_concerns_product")
+  @@index([concern_id], map: "idx_product_concerns_concern")
 }
 
 model product_ingredients {
@@ -62,40 +95,147 @@ model product_ingredients {
   products      products    @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([product_id, ingredient_id])
+  @@index([product_id], map: "idx_product_ingredients_product")
+  @@index([ingredient_id], map: "idx_product_ingredients_ingredient")
 }
 
 model product_skin_types {
-  product_id Int
-  skin_type  String   @db.VarChar(50)
-  products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product_id   Int
+  skin_type_id Int
+  products     products   @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  skin_types   skin_types @relation(fields: [skin_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@id([product_id, skin_type])
+  @@id([product_id, skin_type_id])
+  @@index([product_id], map: "idx_product_skin_types_product")
+  @@index([skin_type_id], map: "idx_product_skin_types_skin_type")
+}
+
+model product_categories {
+  product_id  Int
+  category_id Int
+  categories  categories @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products    products   @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([product_id, category_id])
+  @@index([product_id], map: "idx_product_categories_product")
+  @@index([category_id], map: "idx_product_categories_category")
 }
 
 model products {
-  id                  Int                   @id @default(autoincrement())
-  name                String                @db.VarChar(255)
-  price               Int
-  category_id         Int?
-  description         String?
-  created_at          DateTime?             @default(now()) @db.Timestamp(6)
-  order_items         order_items[]
-  product_concerns    product_concerns[]
-  product_ingredients product_ingredients[]
-  product_skin_types  product_skin_types[]
-  categories          categories?           @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  user_behaviors      user_behaviors[]
+  id                   Int                   @id @default(autoincrement())
+  name                 String                @db.VarChar(255)
+  slug                 String                @unique @db.VarChar(255)
+  description          String?               @db.Text
+  ingredient_full_text String?               @db.Text
+  usage_instructions   String?               @db.Text
+  image_url            String?               @db.VarChar(255)
+  is_featured          Boolean               @default(false)
+  is_active            Boolean               @default(true)
+  summary              String?               @db.VarChar(255)
+  created_at           DateTime?             @default(now()) @db.Timestamp(6)
+  rating_sum           Int                   @default(0)
+  review_count         Int                   @default(0)
+  order_items          order_items[]
+  product_concerns     product_concerns[]
+  product_ingredients  product_ingredients[]
+  product_skin_types   product_skin_types[]
+  product_badges       product_badges[]
+  product_images       product_images[]
+  product_categories   product_categories[]
+  product_variants     product_variants[]
+  user_behaviors       user_behaviors[]
+  cart_items           cart_items[]
+  product_embeddings   product_embeddings[]
+  product_reviews      product_reviews[]
+  flash_sale_items     flash_sale_items[]
+}
 
-  @@index([category_id], map: "idx_product_category")
+model product_variants {
+  id          Int                  @id @default(autoincrement())
+  product_id  Int
+  price       Int
+  sku         String?              @unique @db.VarChar(100)
+  stock       Int                  @default(0)
+  is_active   Boolean              @default(true)
+  products    products             @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  order_items order_items[]
+  cart_items  cart_items[]
+  attributes  variant_attributes[]
+  flash_sale_items flash_sale_items[]
+
+  @@index([product_id], map: "idx_product_variants_product")
+}
+
+model variant_attributes {
+  id         Int              @id @default(autoincrement())
+  variant_id Int
+  name       String           @db.VarChar(100) // "volume", "color", "size"
+  value      String           @db.VarChar(255)
+  variants   product_variants @relation(fields: [variant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([variant_id], map: "idx_variant_attributes_variant")
+}
+
+model product_images {
+  id         Int      @id @default(autoincrement())
+  product_id Int
+  image_url  String   @db.VarChar(255)
+  alt_text   String?  @db.VarChar(255)
+  is_main    Boolean  @default(false)
+  position   Int      @default(0)
+  products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([product_id], map: "idx_product_images_product")
+}
+
+model banners {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.VarChar(255)
+  description String?
+  image_url   String?  @db.VarChar(255)
+  button_text String?  @db.VarChar(50)
+  button_link String?  @db.VarChar(255)
+  is_active   Boolean  @default(true)
+  position    String   @default("HERO") @db.VarChar(50)
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+}
+
+model badges {
+  id             Int              @id @default(autoincrement())
+  name           String           @unique @db.VarChar(100)
+  slug           String           @unique @db.VarChar(100)
+  icon_url       String?          @db.VarChar(255)
+  product_badges product_badges[]
+}
+
+model product_badges {
+  product_id Int
+  badge_id   Int
+  badges     badges   @relation(fields: [badge_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([product_id, badge_id])
+  @@index([product_id], map: "idx_product_badges_product")
+  @@index([badge_id], map: "idx_product_badges_badge")
 }
 
 model skin_profiles {
-  id          Int       @id @default(autoincrement())
-  user_id     Int?      @unique
-  skin_type   String    @db.VarChar(50)
-  sensitivity String?   @db.VarChar(50)
-  created_at  DateTime? @default(now()) @db.Timestamp(6)
-  users       users?    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id           Int         @id @default(autoincrement())
+  user_id      Int?        @unique
+  skin_type_id Int?
+  sensitivity  String?     @db.VarChar(50)
+  created_at   DateTime?   @default(now()) @db.Timestamp(6)
+  users        users?      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  skin_types   skin_types? @relation(fields: [skin_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model skin_types {
+  id                 Int                  @id @default(autoincrement())
+  name               String               @unique @db.VarChar(50)
+  slug               String               @unique @db.VarChar(50)
+  description        String?
+  product_skin_types product_skin_types[]
+  skin_profiles      skin_profiles[]
 }
 
 model user_behaviors {
@@ -121,18 +261,135 @@ model user_concerns {
 }
 
 model users {
-  id             Int              @id @default(autoincrement())
-  email          String           @unique @db.VarChar(255)
-  password       String           @db.VarChar(255)
-  created_at     DateTime?        @default(now()) @db.Timestamp(6)
-  role           Role             @default(USER)
-  orders         orders[]
-  skin_profiles  skin_profiles?
-  user_behaviors user_behaviors[]
-  user_concerns  user_concerns[]
+  id              Int               @id @default(autoincrement())
+  email           String            @unique @db.VarChar(255)
+  password_hash   String?           @db.VarChar(255)
+  name            String?           @db.VarChar(255)
+  phone           String?           @db.VarChar(20)
+  avatar_url      String?           @db.VarChar(255)
+  created_at      DateTime?         @default(now()) @db.Timestamp(6)
+  role            Role              @default(USER)
+  is_verified     Boolean           @default(false)
+  orders          orders[]
+  skin_profiles   skin_profiles?
+  user_behaviors  user_behaviors[]
+  user_concerns   user_concerns[]
+  cart_items      cart_items[]
+  product_reviews product_reviews[]
+}
+
+model cart_items {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  product_id Int
+  variant_id Int?
+  quantity   Int      @default(1)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @db.Timestamp(6)
+
+  users    users             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products products          @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  variants product_variants? @relation(fields: [variant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "idx_cart_items_user")
+  @@index([product_id], map: "idx_cart_items_product")
+  @@index([variant_id], map: "idx_cart_items_variant")
 }
 
 enum Role {
   ADMIN
   USER
+}
+
+model payment_transactions {
+  id             Int      @id @default(autoincrement())
+  order_id       Int
+  transaction_id String?  @db.VarChar(255)
+  request_id     String?  @db.VarChar(255)
+  provider       String   @db.VarChar(50)
+  amount         Int
+  status         String   @db.VarChar(50)
+  raw_response   Json?
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+  updated_at     DateTime @default(now()) @db.Timestamp(6)
+
+  orders orders @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([order_id], map: "idx_payment_transactions_order")
+  @@index([request_id], map: "idx_payment_transactions_request")
+}
+
+model product_embeddings {
+  id          Int                          @id @default(autoincrement())
+  product_id  Int
+  chunk_type  String?                      @db.VarChar(50)
+  chunk_index Int                          @default(0)
+  chunk_text  String                       @db.Text
+  metadata    Json
+  embedding   Unsupported("vector(1536)")?
+  products    products                     @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([product_id], map: "idx_product_embeddings_product")
+}
+
+model product_reviews {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  product_id Int
+  rating     Int      @default(5)
+  comment    String?  @db.Text
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @db.Timestamp(6)
+
+  users         users           @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products      products        @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  review_images review_images[]
+
+  @@index([user_id], map: "idx_product_reviews_user")
+  @@index([product_id], map: "idx_product_reviews_product")
+}
+
+model review_images {
+  id         Int             @id @default(autoincrement())
+  review_id  Int
+  image_url  String          @db.VarChar(255)
+  created_at DateTime        @default(now()) @db.Timestamp(6)
+  reviews    product_reviews @relation(fields: [review_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([review_id], map: "idx_review_images_review")
+}
+
+model flash_sale_campaigns {
+  id          Int      @id @default(autoincrement())
+
+  title       String   @db.VarChar(255)
+
+  start_at    DateTime
+  end_at      DateTime
+
+  is_active   Boolean  @default(true)
+
+  created_at  DateTime @default(now())
+
+  items       flash_sale_items[]
+}
+
+model flash_sale_items {
+  id                Int @id @default(autoincrement())
+
+  campaign_id       Int
+
+  product_id        Int
+  variant_id        Int?
+
+  sale_price        Int
+
+  flash_sales       flash_sale_campaigns @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+
+  products          products             @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  variants          product_variants?    @relation(fields: [variant_id], references: [id], onDelete: Cascade)
+
+  @@index([campaign_id])
+  @@index([product_id])
 }
