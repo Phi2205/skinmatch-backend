@@ -225,16 +225,7 @@ export class AuthService {
           role: 'USER',
         },
       });
-    } else {
-      // Tự động đồng bộ và cập nhật ảnh đại diện hoặc họ tên của tài khoản nếu chưa có
-      user = await this.prisma.users.update({
-        where: { id: user.id },
-        data: {
-          name: user.name || googleName,
-          avatar_url: user.avatar_url || googleAvatar,
-        },
-      });
-    }
+    } 
 
     const tokens = await this.generateTokens(user.id, user.email, user.role || 'USER');
     return {
@@ -247,6 +238,30 @@ export class AuthService {
         role: user.role,
         avatar_url: user.avatar_url,
       },
+    };
+  }
+
+  // 👤 GET PROFILE (ME)
+  async getMe(userId: number) {
+    const user = await this.prisma.users.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        avatar_url: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Người dùng không tồn tại');
+    }
+
+    return {
+      success: true,
+      data: user,
     };
   }
 

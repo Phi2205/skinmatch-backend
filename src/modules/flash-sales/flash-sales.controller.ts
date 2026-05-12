@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, Param, ParseIntPipe, Patch, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Param, ParseIntPipe, Patch, Delete, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { FlashSalesService } from './flash-sales.service.js';
 import { CreateFlashSaleCampaignDto, CreateFlashSaleItemDto, UpdateCampaignStatusDto } from './dto/create-flash-sale.dto.js';
@@ -6,6 +6,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { Role } from '../../generated/prisma/index.js';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
+import { createPaginationMeta } from '../../common/helpers/pagination.helper.js';
 
 @ApiTags('flash-sales')
 @Controller('flash-sales')
@@ -91,18 +93,38 @@ export class FlashSalesController {
       message: 'Xóa sản phẩm khỏi chiến dịch Flash Sale thành công',
     };
   }
-
   @Get('active')
   @ApiOperation({ summary: 'Lấy danh sách Flash Sale đang hoạt động ở khung giờ hiện tại' })
   @ApiResponse({
     status: 200,
     description: 'Lấy danh sách Flash Sale thành công',
   })
-  async getActiveSales() {
+  async getActiveSales(@Query() query: PaginationQueryDto) {
     const activeSales = await this.flashSalesService.getCurrentActiveCampaigns();
+    
+    // Nếu không truyền page và limit, trả về danh sách đầy đủ (tương thích ngược với FE)
+    if (query.page === undefined && query.limit === undefined) {
+      return {
+        success: true,
+        data: activeSales,
+      };
+    }
+
+    const totalItems = activeSales.length;
+    const pageNum = Number(query.page) || 1;
+    const limitNum = Number(query.limit) || 10;
+    const startIndex = (pageNum - 1) * limitNum;
+    const endIndex = startIndex + limitNum;
+    const paginatedItems = activeSales.slice(startIndex, endIndex);
+
+    const meta = createPaginationMeta(pageNum, limitNum, totalItems);
+
     return {
       success: true,
-      data: activeSales,
+      data: {
+        items: paginatedItems,
+        meta,
+      },
     };
   }
 }

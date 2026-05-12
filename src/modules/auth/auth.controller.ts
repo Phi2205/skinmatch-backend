@@ -240,6 +240,20 @@ export class AuthController {
     return res.redirect(`${frontendUrl}/success?accessToken=${result.accessToken}`);
   }
 
+  @Get('me')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Lấy thông tin cá nhân của người dùng hiện tại' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy thông tin cá nhân thành công',
+  })
+  @ApiResponse({ status: 401, description: 'Chưa xác thực hoặc token không hợp lệ' })
+  async getMe(@Req() req: any) {
+    const userId = req.user.id;
+    return this.authService.getMe(userId);
+  }
+
   @Put('update-password')
   @UseGuards(AuthGuard('jwt'))
   @ApiBearerAuth()
