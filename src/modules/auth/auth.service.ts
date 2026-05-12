@@ -157,6 +157,7 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        avatar_url: user.avatar_url,
       },
     };
   }
@@ -211,16 +212,20 @@ export class AuthService {
       where: { email: req.user.email },
     });
 
+    const googleName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || 'Google User';
+    const googleAvatar = req.user.picture || null;
+
     if (!user) {
       user = await this.prisma.users.create({
         data: {
           email: req.user.email,
-          name: `${req.user.firstName} ${req.user.lastName}`,
+          name: googleName,
+          avatar_url: googleAvatar,
           is_verified: true,
           role: 'USER',
         },
       });
-    }
+    } 
 
     const tokens = await this.generateTokens(user.id, user.email, user.role || 'USER');
     return {
@@ -231,7 +236,32 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        avatar_url: user.avatar_url,
       },
+    };
+  }
+
+  // 👤 GET PROFILE (ME)
+  async getMe(userId: number) {
+    const user = await this.prisma.users.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        avatar_url: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Người dùng không tồn tại');
+    }
+
+    return {
+      success: true,
+      data: user,
     };
   }
 

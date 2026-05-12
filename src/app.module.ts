@@ -20,6 +20,8 @@ import { OrdersModule } from './modules/orders/orders.module.js';
 import { ChatbotModule } from './modules/chatbot/chatbot.module.js';
 import { UserModule } from './modules/user/user.module.js';
 import { FlashSalesModule } from './modules/flash-sales/flash-sales.module.js';
+import { AppController } from './app.controller.js';
+import { AppService } from './app.service.js';
 
 @Module({
   imports: [
@@ -60,10 +62,11 @@ import { FlashSalesModule } from './modules/flash-sales/flash-sales.module.js';
     FlashSalesModule,
   ],
 
-  providers: [],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(LoggerMiddleware).forRoutes('*');
   }
-}
+}

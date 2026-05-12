@@ -237,7 +237,21 @@ export class AuthController {
 
     // Redirect to FE with access_token in URL params as requested
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    return res.redirect(`${frontendUrl}/auth/success?accessToken=${result.accessToken}`);
+    return res.redirect(`${frontendUrl}/success?accessToken=${result.accessToken}`);
+  }
+
+  @Get('me')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Lấy thông tin cá nhân của người dùng hiện tại' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy thông tin cá nhân thành công',
+  })
+  @ApiResponse({ status: 401, description: 'Chưa xác thực hoặc token không hợp lệ' })
+  async getMe(@Req() req: any) {
+    const userId = req.user.id;
+    return this.authService.getMe(userId);
   }
 
   @Put('update-password')

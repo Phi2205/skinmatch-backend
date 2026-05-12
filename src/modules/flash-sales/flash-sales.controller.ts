@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, Param, ParseIntPipe, Patch, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Param, ParseIntPipe, Patch, Delete, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { FlashSalesService } from './flash-sales.service.js';
 import { CreateFlashSaleCampaignDto, CreateFlashSaleItemDto, UpdateCampaignStatusDto } from './dto/create-flash-sale.dto.js';
@@ -6,6 +6,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { Role } from '../../generated/prisma/index.js';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
+import { createPaginationMeta } from '../../common/helpers/pagination.helper.js';
 
 @ApiTags('flash-sales')
 @Controller('flash-sales')
@@ -91,18 +93,47 @@ export class FlashSalesController {
       message: 'Xóa sản phẩm khỏi chiến dịch Flash Sale thành công',
     };
   }
-
   @Get('active')
-  @ApiOperation({ summary: 'Lấy danh sách Flash Sale đang hoạt động ở khung giờ hiện tại' })
+  @ApiOperation({ summary: 'Lấy danh sách các chiến dịch Flash Sale đang hoạt động hiện tại (không kèm items)' })
   @ApiResponse({
     status: 200,
-    description: 'Lấy danh sách Flash Sale thành công',
+    description: 'Lấy chiến dịch đang hoạt động thành công',
   })
   async getActiveSales() {
-    const activeSales = await this.flashSalesService.getCurrentActiveCampaigns();
+    const activeCampaigns = await this.flashSalesService.getCurrentActiveCampaigns();
     return {
       success: true,
-      data: activeSales,
+      data: activeCampaigns,
+    };
+  }
+
+  @Get(':campaignId/items')
+  @ApiOperation({ summary: 'Lấy danh sách các sản phẩm (items) của một chiến dịch Flash Sale kèm phân trang' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy danh sách sản phẩm trong chiến dịch thành công',
+  })
+  async getCampaignItems(
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+    @Query() query: PaginationQueryDto,
+  ) {
+    const pageNum = Number(query.page) || 1;
+    const limitNum = Number(query.limit) || 10;
+
+    const { items, totalItems } = await this.flashSalesService.getCampaignItemsPaginated(
+      campaignId,
+      pageNum,
+      limitNum,
+    );
+
+    const meta = createPaginationMeta(pageNum, limitNum, totalItems);
+
+    return {
+      success: true,
+      data: {
+        items,
+        meta,
+      },
     };
   }
 }
