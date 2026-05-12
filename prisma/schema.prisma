@@ -372,7 +372,10 @@ model flash_sale_campaigns {
   created_at  DateTime @default(now())
 
   items       flash_sale_items[]
+
+  @@index([is_active, start_at, end_at], map: "idx_flash_sale_campaigns_active_date")
 }
+
 
 model flash_sale_items {
   id                Int @id @default(autoincrement())

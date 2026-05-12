@@ -100,9 +100,7 @@ export class ProductsService {
 
     // 1. Lấy tất cả active flash sales cho các sản phẩm hiện tại trong 1 query duy nhất (bulk query)
     const productIds = items.map((p) => p.id);
-    console.log(productIds);
     const now = new Date();
-    console.log(now);
     const allFlashSales = productIds.length > 0
       ? await this.repository.findActiveFlashSalesByProductIds(productIds, now)
       : [];
@@ -114,6 +112,7 @@ export class ProductsService {
       }
       flashSaleMap.get(sale.product_id)!.push(sale);
     }
+
 
     // 3. Thực hiện map dữ liệu in-memory
     const formattedItems = items.map((product) => {
@@ -183,7 +182,6 @@ export class ProductsService {
         console.error('Error parsing cached product detail:', e);
       }
     }
-    console.log("đã tới đây")
 
     if (!product) {
       const dbProduct = await this.repository.findProductById(id);
@@ -221,11 +219,9 @@ export class ProductsService {
     }
 
     if (!product) return null;
-    console.log("đã tới đây")
 
     // 1. LUÔN LUÔN lấy thông tin Flash Sale riêng biệt (có cache riêng động tới khi kết thúc)
     const flashSales = await this.getProductActiveFlashSales(id);
-    console.log("flashsales",flashSales)
 
     // 2. Chèn thông tin flash sale vào từng variant tương ứng
     const variantsWithFlashSale = product.variants?.map((variant: any) => {
@@ -668,7 +664,6 @@ export class ProductsService {
 
   async reorderImagesBulk(productId: number, imageOrders: { id: number; position: number }[]) {
     await this.findOne(productId);
-    console.log(imageOrders)
     // Update each image position
     for (const item of imageOrders) {
       await this.repository.updateProductImage(item.id, { position: item.position });

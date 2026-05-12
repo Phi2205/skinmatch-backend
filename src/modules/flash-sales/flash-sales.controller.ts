@@ -94,35 +94,44 @@ export class FlashSalesController {
     };
   }
   @Get('active')
-  @ApiOperation({ summary: 'Lấy danh sách Flash Sale đang hoạt động ở khung giờ hiện tại' })
+  @ApiOperation({ summary: 'Lấy danh sách các chiến dịch Flash Sale đang hoạt động hiện tại (không kèm items)' })
   @ApiResponse({
     status: 200,
-    description: 'Lấy danh sách Flash Sale thành công',
+    description: 'Lấy chiến dịch đang hoạt động thành công',
   })
-  async getActiveSales(@Query() query: PaginationQueryDto) {
-    const activeSales = await this.flashSalesService.getCurrentActiveCampaigns();
-    
-    // Nếu không truyền page và limit, trả về danh sách đầy đủ (tương thích ngược với FE)
-    if (query.page === undefined && query.limit === undefined) {
-      return {
-        success: true,
-        data: activeSales,
-      };
-    }
+  async getActiveSales() {
+    const activeCampaigns = await this.flashSalesService.getCurrentActiveCampaigns();
+    return {
+      success: true,
+      data: activeCampaigns,
+    };
+  }
 
-    const totalItems = activeSales.length;
+  @Get(':campaignId/items')
+  @ApiOperation({ summary: 'Lấy danh sách các sản phẩm (items) của một chiến dịch Flash Sale kèm phân trang' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy danh sách sản phẩm trong chiến dịch thành công',
+  })
+  async getCampaignItems(
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+    @Query() query: PaginationQueryDto,
+  ) {
     const pageNum = Number(query.page) || 1;
     const limitNum = Number(query.limit) || 10;
-    const startIndex = (pageNum - 1) * limitNum;
-    const endIndex = startIndex + limitNum;
-    const paginatedItems = activeSales.slice(startIndex, endIndex);
+
+    const { items, totalItems } = await this.flashSalesService.getCampaignItemsPaginated(
+      campaignId,
+      pageNum,
+      limitNum,
+    );
 
     const meta = createPaginationMeta(pageNum, limitNum, totalItems);
 
     return {
       success: true,
       data: {
-        items: paginatedItems,
+        items,
         meta,
       },
     };

@@ -63,7 +63,7 @@ export class FlashSalesRepository {
   }
 
   /**
-   * Tìm các chiến dịch đang hoạt động dựa vào mốc thời gian truyền vào
+   * Tìm các chiến dịch đang hoạt động dựa vào mốc thời gian truyền vào (không kèm items)
    */
   async findActiveCampaigns(now: Date) {
     return this.prisma.flash_sale_campaigns.findMany({
@@ -72,34 +72,75 @@ export class FlashSalesRepository {
         start_at: { lte: now },
         end_at: { gte: now },
       },
-      include: {
-        items: {
-          include: {
-            products: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-                image_url: true,
-                summary: true,
-              },
-            },
-            variants: {
-              select: {
-                id: true,
-                price: true,
-                sku: true,
-                stock: true,
-              },
-            },
-          },
-        },
-      },
       orderBy: {
         start_at: 'asc',
       },
     });
   }
+
+  /**
+   * Lấy danh sách sản phẩm trong một chiến dịch kèm phân trang ở cấp độ database (Dạng Product-Centric chuẩn E-Commerce)
+   */
+  async findCampaignItemsPaginated(campaignId: number, skip: number, take: number) {
+    const [products, totalItems] = await Promise.all([
+      this.prisma.products.findMany({
+        where: {
+          flash_sale_items: {
+            some: { campaign_id: campaignId },
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          image_url: true,
+          summary: true,
+          rating_sum: true,
+          review_count: true,
+          flash_sale_items: {
+            where: { campaign_id: campaignId },
+            select: {
+              id: true,
+              variant_id: true,
+              sale_price: true,
+              variants: {
+                select: {
+                  id: true,
+                  price: true,
+                  sku: true,
+                  stock: true,
+                  attributes: {
+                    select: {
+                      id: true,
+                      name: true,
+                      value: true,
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: {
+              sale_price: 'asc', // Thường hiển thị variant rẻ nhất lên đầu tiên
+            },
+          },
+        },
+        skip,
+        take,
+      }),
+      this.prisma.products.count({
+        where: {
+          flash_sale_items: {
+            some: { campaign_id: campaignId },
+          },
+        },
+      }),
+    ]);
+
+    return { items: products, totalItems };
+  }
+
+
+
 
   /**
    * Tìm chiến dịch sắp diễn ra tiếp theo gần nhất
