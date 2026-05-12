@@ -20,6 +20,9 @@ COPY . .
 # Generate Prisma Client và Build project
 RUN npx prisma generate
 RUN npm run build
+# Sao chép file schema.prisma vào thư mục dist để Prisma Client tìm thấy khi chạy trong môi trường production bundle
+RUN mkdir -p dist/generated/prisma && cp prisma/schema.prisma dist/generated/prisma/schema.prisma
+
 
 # Prune devDependencies to reduce image size
 RUN npm prune --omit=dev

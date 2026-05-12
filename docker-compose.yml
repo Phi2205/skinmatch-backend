@@ -12,6 +12,8 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_HOST=redis
+    volumes:
+      - ./.env:/app/.env
     depends_on:
       - redis
 
