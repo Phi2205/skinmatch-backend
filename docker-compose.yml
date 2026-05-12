@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: skinmatch-backend
     ports:
-      - "4001:4001"
+      - "4000:4000"
     env_file:
       - .env
     environment:
