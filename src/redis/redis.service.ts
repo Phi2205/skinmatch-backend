@@ -77,4 +77,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   async flushDb(): Promise<void> {
     await this.client.flushdb();
   }
+
+  async ping(): Promise<string> {
+    return await this.client.ping();
+  }
 }
+
