@@ -56,6 +56,14 @@ export class FlashSalesService {
     // Khi tạo mới chiến dịch, tiến hành xóa cache hiện tại để khách hàng cập nhật dữ liệu mới nhất ngay lập tức
     await this.redisService.del(this.CACHE_KEY);
 
+    // Xóa cache của từng sản phẩm tham gia trong chiến dịch mới
+    if (dto.items && dto.items.length > 0) {
+      const productIds = [...new Set(dto.items.map((item) => item.product_id))];
+      await Promise.all(
+        productIds.map((id) => this.redisService.del(`product:flash-sales-list:${id}`))
+      );
+    }
+
     return campaign;
   }
 
@@ -103,6 +111,15 @@ export class FlashSalesService {
 
     return activeCampaigns;
   }
+
+  /**
+   * Lấy danh sách sản phẩm tham gia một chiến dịch có phân trang
+   */
+  async getCampaignItemsPaginated(campaignId: number, page: number, limit: number) {
+    const skip = (page - 1) * limit;
+    return this.flashSalesRepository.findCampaignItemsPaginated(campaignId, skip, limit);
+  }
+
 
   /**
    * Thêm sản phẩm/phân loại vào chiến dịch Flash Sale có sẵn
@@ -160,6 +177,7 @@ export class FlashSalesService {
 
     // 6. Xóa cache Redis để cập nhật thông tin mới nhất
     await this.redisService.del(this.CACHE_KEY);
+    await this.redisService.del(`product:flash-sales-list:${dto.product_id}`);
 
     // 7. Trả về chi tiết chiến dịch sau khi cập nhật
     return this.flashSalesRepository.findCampaignWithItems(campaignId);
@@ -186,6 +204,18 @@ export class FlashSalesService {
     // 3. Xóa cache Redis để cập nhật lại trạng thái chiến dịch ngay lập tức
     await this.redisService.del(this.CACHE_KEY);
 
+    // Xóa cache của tất cả sản phẩm tham gia trong chiến dịch này
+    const campaignItems = await this.prisma.flash_sale_items.findMany({
+      where: { campaign_id: campaignId },
+      select: { product_id: true },
+    });
+    if (campaignItems.length > 0) {
+      const productIds = [...new Set(campaignItems.map((item) => item.product_id))];
+      await Promise.all(
+        productIds.map((id) => this.redisService.del(`product:flash-sales-list:${id}`))
+      );
+    }
+
     // 4. Trả về chi tiết chiến dịch sau khi cập nhật
     return this.flashSalesRepository.findCampaignWithItems(campaignId);
   }
@@ -209,6 +239,7 @@ export class FlashSalesService {
 
     // 3. Xóa cache Redis để cập nhật lại danh sách hoạt động
     await this.redisService.del(this.CACHE_KEY);
+    await this.redisService.del(`product:flash-sales-list:${item.product_id}`);
 
     return true;
   }

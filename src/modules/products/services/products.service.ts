@@ -115,6 +115,7 @@ export class ProductsService {
       flashSaleMap.get(sale.product_id)!.push(sale);
     }
 
+
     // 3. Thực hiện map dữ liệu in-memory
     const formattedItems = items.map((product) => {
       const minPrice = product.product_variants?.length
