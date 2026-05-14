@@ -37,40 +37,30 @@ export class ProductsService {
   // ─── Public ────────────────────────────────────────────
 
   async getHomepageData() {
-    const [banners, featuredProducts] = await Promise.all([
-      this.repository.findActiveBanners(),
-      this.repository.findFeaturedProducts(10),
-    ]);
-
-    const formattedProducts = featuredProducts.map((product) => {
-      const minPrice = product.product_variants?.length
-        ? Math.min(...product.product_variants.map((v) => v.price))
-        : 0;
-
-      return {
-        ...product,
-        price: minPrice,
-        rating: product.review_count > 0 ? Math.round((product.rating_sum / product.review_count) * 10) / 10 : 0,
-        reviews_count: product.review_count,
-        variants: product.product_variants,
-        badges: product.product_badges.map((pb) => pb.badges),
-        concerns: product.product_concerns.map((pc) => pc.concerns),
-        ingredients: product.product_ingredients.map((pi) => pi.ingredients),
-        skin_types: product.product_skin_types.map((ps) => ps.skin_types),
-        categories: product.product_categories.map((pc) => pc.categories),
-        product_badges: undefined,
-        product_concerns: undefined,
-        product_ingredients: undefined,
-        product_skin_types: undefined,
-        product_categories: undefined,
-        product_variants: undefined,
-      };
-    });
+    const banners = await this.repository.findActiveBanners();
 
     return {
       banners,
-      featuredProducts: formattedProducts,
     };
+  }
+
+  async createBanner(dto: any, imageUrl: string) {
+    const dataToCreate = { ...dto, image_url: imageUrl };
+    return this.repository.createBanner(dataToCreate);
+  }
+
+  async updateBanner(id: number, dto: any, imageUrl?: string) {
+    const banner = await this.repository.findBannerById(id);
+    if (!banner) {
+      throw new NotFoundException(`Không tìm thấy banner với ID ${id}`);
+    }
+
+    const dataToUpdate = { ...dto };
+    if (imageUrl) {
+      dataToUpdate.image_url = imageUrl;
+    }
+
+    return this.repository.updateBanner(id, dataToUpdate);
   }
 
   async getAllProductsPaginated(query: ProductFilterDto, onlyActive = true) {
