@@ -1,5 +1,5 @@
-import { Controller, Post, Param, UseGuards, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Post, Param, Body, UseGuards, UnauthorizedException } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { ChatbotIngestionService } from '../services/chatbot-ingestion.service.js';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../../common/guards/roles.guard.js';
@@ -32,6 +32,33 @@ export class ChatbotAdminController {
     return {
       success: true,
       message: `Đồng bộ hóa vector sản phẩm ID ${productId} hoàn tất`,
+    };
+  }
+
+  @Post('clear')
+  @ApiOperation({ summary: 'Xóa toàn bộ dữ liệu vector embeddings với mật khẩu xác nhận (Admin)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        password: {
+          type: 'string',
+          example: 'abcd',
+          description: 'Mật khẩu xác nhận để xóa toàn bộ dữ liệu',
+        },
+      },
+      required: ['password'],
+    },
+  })
+  async clearAllEmbeddings(@Body('password') password: string) {
+    if (password !== '123456') {
+      throw new UnauthorizedException('Mật khẩu xác nhận không chính xác');
+    }
+    const result = await this.ingestionService.clearAllEmbeddings();
+    return {
+      success: true,
+      message: 'Đã dọn dẹp toàn bộ dữ liệu vector embeddings',
+      data: result,
     };
   }
 }
