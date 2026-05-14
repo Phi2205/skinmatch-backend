@@ -63,9 +63,18 @@ export class ChatbotIngestionService {
         .filter(Boolean)
         .join(', ') || 'Chưa xác định';
 
-    // 1. CHUNK TỔNG QUAN (Thông tin chung & Gợi ý phân loại)
+    const activeVariants = product.product_variants?.filter((v: any) => v.is_active) || [];
+    const pricesList = activeVariants.map((v: any) => {
+      const attrs = v.attributes?.map((a: any) => `${a.name}: ${a.value}`).join(', ');
+      const attrStr = attrs ? ` (${attrs})` : '';
+      return `${v.price.toLocaleString('vi-VN')} VND${attrStr}`;
+    });
+    const pricesStr = pricesList.length > 0 ? pricesList.join('; ') : 'Chưa cập nhật giá';
+
+    // 1. CHUNK TỔNG QUAN (Thông tin chung, Giá cả & Gợi ý phân loại)
     const generalText = `ID Sản Phẩm: ${product.id}
 Tên Sản Phẩm: ${product.name}
+Giá bán (price): ${pricesStr}
 Danh mục: ${categoriesStr}
 Tóm tắt (summary): ${product.summary || 'Không có tóm tắt'}
 Loại da phù hợp: ${skinTypesStr}
@@ -82,6 +91,7 @@ Giải quyết vấn đề da: ${concernsStr}`;
     if (cleanedDescription && cleanedDescription.toLowerCase() !== 'không có mô tả chi tiết') {
       const descriptionText = `ID Sản Phẩm: ${product.id}
 Tên Sản Phẩm: ${product.name}
+Giá bán (price): ${pricesStr}
 Mô tả chi tiết (description): ${cleanedDescription}`;
 
       chunks.push({
@@ -103,6 +113,7 @@ Mô tả chi tiết (description): ${cleanedDescription}`;
 
       const usageIngredientsText = `ID Sản Phẩm: ${product.id}
 Tên Sản Phẩm: ${product.name}
+Giá bán (price): ${pricesStr}
 ${usagePart}
 ${ingredientsPart}`;
 
@@ -171,6 +182,7 @@ ${ingredientsPart}`;
         product_categories: { include: { categories: true } },
         product_skin_types: { include: { skin_types: true } },
         product_concerns: { include: { concerns: true } },
+        product_variants: { include: { attributes: true } },
       },
     });
 
@@ -257,5 +269,15 @@ ${ingredientsPart}`;
       success: successCount,
       failed: failedCount,
     };
+  }
+
+  /**
+   * Xóa toàn bộ dữ liệu vector embeddings trong database
+   */
+  async clearAllEmbeddings(): Promise<{ deletedCount: number }> {
+    this.logger.log('Bắt đầu dọn dẹp toàn bộ dữ liệu product_embeddings...');
+    const result = await this.prisma.product_embeddings.deleteMany({});
+    this.logger.log(`Đã xóa thành công ${result.count} dòng trong product_embeddings.`);
+    return { deletedCount: result.count };
   }
 }

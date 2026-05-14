@@ -14,6 +14,25 @@ export class ProductsRepository {
     });
   }
 
+  async createBanner(data: any) {
+    return this.prisma.banners.create({
+      data,
+    });
+  }
+
+  async findBannerById(id: number) {
+    return this.prisma.banners.findUnique({
+      where: { id },
+    });
+  }
+
+  async updateBanner(id: number, data: any) {
+    return this.prisma.banners.update({
+      where: { id },
+      data,
+    });
+  }
+
   async findFeaturedProducts(limit = 10) {
     return this.prisma.products.findMany({
       where: { is_featured: true, is_active: true },

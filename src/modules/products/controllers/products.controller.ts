@@ -51,7 +51,7 @@ export class ProductsController {
   // ═══════════════════════════════════════════════════════
 
   @Get('homepage')
-  @ApiOperation({ summary: 'Get homepage data including banners and featured products' })
+  @ApiOperation({ summary: 'Get homepage data including banners' })
   async getHomepage() {
     const data = await this.productsService.getHomepageData();
     return {
