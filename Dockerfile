@@ -45,8 +45,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 
-# Use the same port as defined in package.json or Render's PORT
-EXPOSE 4001
+# Use the same port as defined in package.json or .env
+EXPOSE 4000
 
-# Start the application
-CMD ["npm", "run", "start:prod"]
+# Start the application directly with node to handle signals correctly
+CMD ["node", "dist/main.js"]
