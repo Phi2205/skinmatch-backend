@@ -21,8 +21,10 @@ export class AppService implements OnApplicationBootstrap {
   }
 
   onApplicationBootstrap() {
-    // Chạy kiểm tra health check đầu tiên ngay sau khi ứng dụng khởi động thành công
-    this.runHealthCheck();
+    // Chạy kiểm tra health check đầu tiên sau 5 giây để đảm bảo cổng đã mở và server đã lắng nghe
+    setTimeout(() => {
+      this.runHealthCheck();
+    }, 5000);
 
     // Thiết lập chu kỳ 30 giây chạy check health một lần
     setInterval(() => {
@@ -32,7 +34,17 @@ export class AppService implements OnApplicationBootstrap {
 
   private async runHealthCheck() {
     const timestamp = new Date().toLocaleString('vi-VN');
-    console.log(`[HEALTH CHECK] [${timestamp}] - STATUS: OK`);
+    const port = process.env.PORT ?? 4000;
+    const baseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`;
+    const url = `${baseUrl}/health`;
+
+    try {
+      const response = await fetch(url);
+      const data = await response.json() as any;
+      console.log(`[HEALTH CHECK] [${timestamp}] - Self-ping successful! URL: ${url} - STATUS: ${response.status} - RESPONSE:`, data);
+    } catch (error: any) {
+      console.error(`[HEALTH CHECK] [${timestamp}] - Self-ping failed! URL: ${url} - Error:`, error.message);
+    }
   }
 }
 
