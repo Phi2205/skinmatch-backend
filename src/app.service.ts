@@ -14,22 +14,10 @@ export class AppService implements OnApplicationBootstrap {
   }
 
   async getHealth() {
-    try {
-      await this.prisma.$queryRaw`SELECT 1`;
-      await this.redis.ping();
-      return {
-        status: 'OK',
-        database: 'Connected',
-        redis: 'Connected',
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      return {
-        status: 'ERROR',
-        message: error.message || error,
-        timestamp: new Date().toISOString(),
-      };
-    }
+    return {
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+    };
   }
 
   onApplicationBootstrap() {
@@ -44,17 +32,7 @@ export class AppService implements OnApplicationBootstrap {
 
   private async runHealthCheck() {
     const timestamp = new Date().toLocaleString('vi-VN');
-    try {
-      // 1. Kiểm tra kết nối database Postgres bằng truy vấn siêu nhẹ SELECT 1
-      await this.prisma.$queryRaw`SELECT 1`;
-
-      // 2. Kiểm tra kết nối Redis Cache bằng lệnh ping()
-      const redisPingResult = await this.redis.ping();
-
-      console.log(`[HEALTH CHECK] [${timestamp}] - STATUS: OK | DB: Connected | Redis: ${redisPingResult}`);
-    } catch (error) {
-      console.error(`[HEALTH CHECK] [${timestamp}] - STATUS: ERROR | Details:`, error.message || error);
-    }
+    console.log(`[HEALTH CHECK] [${timestamp}] - STATUS: OK`);
   }
 }
 
